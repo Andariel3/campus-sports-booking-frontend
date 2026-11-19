@@ -15,7 +15,8 @@ import {
   ChevronRight, 
   Info,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  CreditCard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -401,24 +402,28 @@ export default function FacilitiesPage() {
       {/* ───── Modal Detalii Facilitate ───── */}
       <Dialog open={Boolean(activeFacility)} onOpenChange={(open) => !open && setActiveFacility(null)}>
         {activeFacility && (
-          <DialogContent className="max-w-md rounded-2xl p-6">
-            <DialogHeader>
-              <div className="flex items-center gap-2 mb-1">
-                <Badge variant="secondary" className="bg-blue-50 text-[#0F52BA] font-semibold text-xs">
-                  {activeFacility.sport.toUpperCase()}
+          <DialogContent className="max-w-md w-full rounded-3xl p-6 sm:p-7 bg-white border border-slate-200/90 shadow-2xl shadow-slate-900/15">
+            <DialogHeader className="text-left space-y-1.5 pb-1">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="bg-blue-50 text-[#0F52BA] border border-blue-100 font-bold text-xs uppercase px-2.5 py-0.5">
+                  {activeFacility.sport}
                 </Badge>
-                <Badge variant="success" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs">
+                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-semibold px-2.5 py-0.5">
                   Disponibil
                 </Badge>
               </div>
-              <DialogTitle className="text-xl font-bold">{activeFacility.name}</DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground">
-                {getFacilitySubtitle(activeFacility.sport, activeFacility.description)}
+              <DialogTitle className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                {activeFacility.name}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500 font-medium flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5 text-[#0F52BA] shrink-0" />
+                <span>Baza Sportivă USV · {getFacilitySubtitle(activeFacility.sport, activeFacility.description)}</span>
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 pt-2">
-              <div className="aspect-16/10 rounded-xl overflow-hidden bg-slate-100">
+            <div className="space-y-4 pt-1">
+              {/* Fotografie facilitate */}
+              <div className="aspect-16/10 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200/80 shadow-xs">
                 <img
                   src={getSportImage(activeFacility.sport, activeFacility.type)}
                   alt={activeFacility.name}
@@ -426,47 +431,63 @@ export default function FacilitiesPage() {
                 />
               </div>
 
-              {activeFacility.description && (
-                <div className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  {activeFacility.description}
+              {/* Detalii / Facilități */}
+              <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-1 text-xs text-slate-600">
+                <div className="font-bold text-slate-900 flex items-center gap-1.5 text-xs">
+                  <Sparkles className="h-4 w-4 text-[#0F52BA]" />
+                  <span>Dotări & Caracteristici</span>
                 </div>
-              )}
+                <p className="text-[11px] text-slate-600 leading-relaxed pl-1">
+                  {activeFacility.description && activeFacility.description !== getFacilitySubtitle(activeFacility.sport, activeFacility.description)
+                    ? activeFacility.description
+                    : "Acces pe bază de programare · Vestiare cu dușuri · Nocturnă · Echipament disponibil la recepție."}
+                </p>
+              </div>
 
+              {/* Grilă Program & Tarif */}
               <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-muted-foreground block text-[11px]">Program zilnic</span>
-                  <span className="font-bold text-foreground mt-0.5 block">
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80">
+                  <span className="text-slate-500 font-medium flex items-center gap-1.5 text-[11px]">
+                    <Clock className="h-3.5 w-3.5 text-[#0F52BA]" />
+                    Program zilnic
+                  </span>
+                  <span className="font-bold text-slate-900 mt-1 block text-sm">
                     {activeFacility.openHour && activeFacility.closeHour
                       ? `${activeFacility.openHour} – ${activeFacility.closeHour}`
                       : "08:00 – 22:00"}
                   </span>
                 </div>
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-muted-foreground block text-[11px]">Tarif orar</span>
-                  <span className="font-bold text-[#0F52BA] mt-0.5 block">
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80">
+                  <span className="text-slate-500 font-medium flex items-center gap-1.5 text-[11px]">
+                    <CreditCard className="h-3.5 w-3.5 text-[#0F52BA]" />
+                    Tarif orar
+                  </span>
+                  <span className="font-black text-[#0F52BA] mt-1 block text-sm">
                     {activeFacility.pricePerHour} lei / oră
                   </span>
                 </div>
               </div>
 
+              {/* Butoane de acțiune */}
               <div className="pt-2 flex gap-3">
                 <Button
                   variant="outline"
                   onClick={() => setActiveFacility(null)}
-                  className="flex-1 rounded-xl text-xs h-10"
+                  className="flex-1 rounded-xl text-xs h-11 font-semibold text-slate-700 border-slate-200 hover:bg-slate-50"
                 >
                   Închide
                 </Button>
                 <Button
                   asChild
-                  className="flex-1 rounded-xl bg-[#0F52BA] hover:bg-[#1E40AF] text-white text-xs h-10 font-semibold"
+                  className="flex-1 rounded-xl bg-gradient-to-r from-[#0F52BA] to-[#1E40AF] hover:from-[#0d469e] hover:to-[#17328c] text-white text-xs h-11 font-bold shadow-md shadow-[#0F52BA]/25"
                 >
                   <Link
                     to={`/rezerva/${activeFacility.id}`}
                     onClick={() => setActiveFacility(null)}
+                    className="flex items-center justify-center gap-1.5"
                   >
-                    Mergi la rezervare
-                    <ChevronRight className="h-4 w-4 ml-1" />
+                    <span>Mergi la rezervare</span>
+                    <ChevronRight className="h-4 w-4" />
                   </Link>
                 </Button>
               </div>

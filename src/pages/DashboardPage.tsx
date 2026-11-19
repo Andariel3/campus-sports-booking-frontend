@@ -531,7 +531,7 @@ export default function DashboardPage() {
 
       {/* Modal Adăugare / Editare Resursă */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
+        <DialogContent className="sm:max-w-md w-full rounded-3xl p-6 sm:p-7 bg-white border border-slate-200/90 shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold">
               {editingResource ? `Editează ${editingResource.name}` : "Adaugă resursă nouă"}
@@ -653,7 +653,7 @@ export default function DashboardPage() {
 
       {/* Dialog Confirmare Ștergere */}
       <Dialog open={deleteConfirmId !== null} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
-        <DialogContent className="sm:max-w-sm rounded-2xl">
+        <DialogContent className="sm:max-w-sm w-full rounded-3xl p-6 bg-white border border-slate-200/90 shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-rose-600 flex items-center gap-2">
               <AlertCircle className="h-5 w-5" /> Confirmă dezactivarea

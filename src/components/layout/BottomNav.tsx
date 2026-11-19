@@ -43,7 +43,7 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-card/95 backdrop-blur-md border-t border-border shadow-lg pb-[calc(env(safe-area-inset-bottom,0px)+6px)] pt-1.5 px-2"
+      className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg pb-[calc(env(safe-area-inset-bottom,0px)+6px)] pt-1.5 px-2"
       aria-label="Navigare mobil"
     >
       <div className="flex items-center justify-around max-w-md mx-auto">
@@ -61,14 +61,14 @@ export function BottomNav() {
               className={cn(
                 "flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-xl transition-all duration-150 min-h-[48px] touch-manipulation",
                 isActive
-                  ? "text-primary font-semibold"
-                  : "text-muted-foreground hover:text-foreground active:scale-95"
+                  ? "text-[#0F52BA] font-bold"
+                  : "text-slate-500 hover:text-slate-900 active:scale-95"
               )}
             >
               <div
                 className={cn(
-                  "relative p-1 rounded-lg transition-colors",
-                  isActive ? "bg-primary/10 text-primary" : ""
+                  "relative p-1 rounded-xl transition-colors",
+                  isActive ? "bg-[#0F52BA]/10 text-[#0F52BA]" : ""
                 )}
               >
                 <Icon className={cn("h-5 w-5", isActive ? "stroke-[2.4px]" : "stroke-[1.8px]")} />
