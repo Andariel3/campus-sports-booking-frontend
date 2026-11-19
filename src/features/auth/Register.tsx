@@ -32,7 +32,7 @@ const registerSchema = z
     phone: z.string().trim().optional(),
     password: z
       .string()
-      .min(6, "Parola trebuie să conțină cel puțin 6 caractere"),
+      .min(8, "Parola trebuie să conțină cel puțin 8 caractere"),
     confirmPassword: z.string().min(1, "Confirmă parola introdusă"),
     agreeRegulations: z.boolean().refine((val) => val === true, {
       message: "Trebuie să fii de acord cu regulamentul bazei sportive",
@@ -171,7 +171,7 @@ export function Register() {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Minim 6 caractere"
+                  placeholder="Minim 8 caractere"
                   autoComplete="new-password"
                   disabled={isSubmitting}
                   {...register("password")}

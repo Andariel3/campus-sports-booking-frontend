@@ -1,6 +1,6 @@
 import { useEffect, useState, ReactNode, useCallback } from "react";
 import type { User, UserRole } from "@/api/types";
-import { api } from "@/api/client";
+import { apiClient } from "@/api/client";
 import { mapeazaEroareApi } from "@/lib/erori";
 import { AuthContext } from "./authContextDefinition";
 
@@ -8,9 +8,11 @@ const TOKEN_KEY = "usv_token";
 const USER_KEY = "usv_user";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => sessionStorage.getItem(TOKEN_KEY));
+  const [token, setToken] = useState<string | null>(() => {
+    return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+  });
   const [user, setUser] = useState<User | null>(() => {
-    const saved = sessionStorage.getItem(USER_KEY);
+    const saved = sessionStorage.getItem(USER_KEY) || localStorage.getItem(USER_KEY);
     if (!saved) return null;
     try {
       return JSON.parse(saved) as User;
@@ -25,29 +27,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     sessionStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(USER_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
   }, []);
 
   const refreshUser = useCallback(async () => {
-    if (!token) {
+    const currentToken = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+    if (!currentToken) {
       setUser(null);
       setIsLoading(false);
       return;
     }
 
     try {
-      const res = await api.GET("/users/me");
-      if (res.data) {
-        setUser(res.data);
-        sessionStorage.setItem(USER_KEY, JSON.stringify(res.data));
-      } else if (res.error) {
-        logout();
+      const meUser = await apiClient.auth.me();
+      if (meUser) {
+        setUser(meUser);
+        sessionStorage.setItem(USER_KEY, JSON.stringify(meUser));
+        localStorage.setItem(USER_KEY, JSON.stringify(meUser));
       }
     } catch {
-      // Ignorăm erori tranzitorii de rețea
+      // Dacă sesiunea este invalidată pe server
+      logout();
     } finally {
       setIsLoading(false);
     }
-  }, [token, logout]);
+  }, [logout]);
 
   useEffect(() => {
     refreshUser();
@@ -55,31 +60,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const res = await api.POST("/auth/login", {
-        body: { email: email.trim(), password },
-      });
-
-      if (res.error) {
-        return { success: false, error: mapeazaEroareApi(res.error) };
-      }
-
-      if (res.data?.accessToken) {
-        const receivedToken = res.data.accessToken;
+      const tokenData = await apiClient.auth.login(email, password);
+      if (tokenData?.accessToken) {
+        const receivedToken = tokenData.accessToken;
         setToken(receivedToken);
         sessionStorage.setItem(TOKEN_KEY, receivedToken);
+        localStorage.setItem(TOKEN_KEY, receivedToken);
 
-        const meRes = await api.GET("/users/me", {
-          headers: { Authorization: `Bearer ${receivedToken}` },
-        });
-
-        if (meRes.data) {
-          setUser(meRes.data);
-          sessionStorage.setItem(USER_KEY, JSON.stringify(meRes.data));
+        const meUser = await apiClient.auth.me();
+        if (meUser) {
+          setUser(meUser);
+          sessionStorage.setItem(USER_KEY, JSON.stringify(meUser));
+          localStorage.setItem(USER_KEY, JSON.stringify(meUser));
         }
 
         return { success: true };
       }
-
       return { success: false, error: "Răspunsul de autentificare nu a inclus un token valid." };
     } catch (err) {
       return { success: false, error: mapeazaEroareApi(err) };
@@ -93,18 +89,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     phone?: string;
   }): Promise<{ success: boolean; error?: string }> => {
     try {
-      const res = await api.POST("/auth/register", {
-        body: {
-          email: data.email.trim(),
-          password: data.password,
-          fullName: data.fullName.trim(),
-          phone: data.phone?.trim() || undefined,
-        },
-      });
+      const parts = data.fullName.trim().split(" ");
+      const firstName = parts[0] || data.fullName.trim();
+      const lastName = parts.slice(1).join(" ") || firstName;
 
-      if (res.error) {
-        return { success: false, error: mapeazaEroareApi(res.error) };
-      }
+      // Trimitere cu suport complet pentru schema FastAPI (firstName, lastName) și OpenAPI (fullName)
+      await apiClient.auth.register({
+        email: data.email.trim(),
+        password: data.password,
+        fullName: data.fullName.trim(),
+        phone: data.phone?.trim() || undefined,
+        ...( { firstName, lastName } as Record<string, string> ),
+      });
 
       return await login(data.email, data.password);
     } catch (err) {
