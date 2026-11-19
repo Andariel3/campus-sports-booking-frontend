@@ -12,6 +12,7 @@ import { TimeSlotGrid } from "@/features/availability/TimeSlotGrid";
 import { useAvailability, notifyAvailabilityChange } from "@/features/availability/useAvailability";
 import { BookingVerificationModal } from "@/features/reservations/BookingVerificationModal";
 import { BookingConfirmationView } from "@/features/reservations/BookingConfirmationView";
+import { MonthlyLimitCard } from "@/features/reservations/MonthlyLimitCard";
 import { 
   ArrowLeft, 
   ShieldAlert, 
@@ -334,14 +335,14 @@ export function BookingPage() {
               </div>
             </div>
 
-            {/* Mesaj informativ regulament limită conform wireframe W3 */}
+            {/* Componenta vizuală Limita ta lunară conform task-ului IP-45 */}
             {isStudent && (
-              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                <span>
-                  Aceasta va fi a {nextReservationIndex}-a rezervare din 3 pentru luna aceasta.
-                </span>
-              </p>
+              <MonthlyLimitCard
+                usedCount={studentReservationsCount}
+                maxLimit={maxMonthlyLimit}
+                variant="compact"
+                showNextPreview={true}
+              />
             )}
 
             {/* Buton confirmare */}

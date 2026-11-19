@@ -1,4 +1,4 @@
-import createClient, { type Middleware } from "openapi-fetch";
+       import createClient, { type Middleware } from "openapi-fetch";
 import type { paths } from "./schema";
 import type {
   Resource,

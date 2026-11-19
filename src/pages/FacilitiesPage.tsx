@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
+import { MonthlyLimitCard } from "@/features/reservations/MonthlyLimitCard";
 
 // Categorii de filtrare cerute explicit în task: Toate, Fotbal, Tenis, Înot
 const SPORT_TABS = [
@@ -148,26 +149,13 @@ export default function FacilitiesPage() {
 
             {/* Indicator Limită Lunară pentru Studenți conform Wireframe W2 */}
             {(!user || isStudent) && (
-              <div className="w-full sm:w-80 p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 shadow-xs">
-                <div className="flex items-center justify-between text-xs font-semibold mb-1.5">
-                  <span className="text-muted-foreground">Limita ta lunară</span>
-                  <span className="text-[#0F52BA] font-bold">
-                    {studentReservationsCount} / {maxMonthlyLimit}
-                  </span>
-                </div>
-                <Progress
-                  value={(studentReservationsCount / maxMonthlyLimit) * 100}
-                  className="h-2 bg-slate-200"
+              <div className="w-full sm:w-80 shrink-0">
+                <MonthlyLimitCard
+                  usedCount={studentReservationsCount}
+                  maxLimit={maxMonthlyLimit}
+                  noShowCount={user?.noShowCount || 0}
+                  isBlocked={isBlocked}
                 />
-                <p className="text-[11px] text-muted-foreground mt-1.5 flex items-center justify-between">
-                  <span>
-                    {remainingReservations > 0
-                      ? `Mai ai ${remainingReservations} ${
-                          remainingReservations === 1 ? "rezervare disponibilă" : "rezervări disponibile"
-                        } luna aceasta.`
-                      : "Ai atins limita de 3 rezervări în această lună."}
-                  </span>
-                </p>
               </div>
             )}
           </div>
