@@ -28,6 +28,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AdminBookingsList } from "@/features/admin/AdminBookingsList";
 import { AdminUsersList } from "@/features/admin/AdminUsersList";
 import { MaintenanceModal } from "@/features/admin/MaintenanceModal";
+import { MonthlyReportModal } from "@/features/reports/MonthlyReportModal";
 
 interface Resource {
   id: number;
@@ -45,6 +46,7 @@ export default function DashboardPage() {
   const [adminSection, setAdminSection] = useState<"bookings" | "users" | "resources">("bookings");
   const [modalOpen, setModalOpen] = useState(false);
   const [maintenanceModalOpen, setMaintenanceModalOpen] = useState(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -318,7 +320,10 @@ export default function DashboardPage() {
       {/* Conținut în funcție de tab-ul selectat */}
       <main className="mx-auto max-w-7xl flex-1 px-4 py-6 sm:px-8 w-full space-y-6">
         {adminSection === "bookings" && (
-          <AdminBookingsList onOpenMaintenanceModal={() => setMaintenanceModalOpen(true)} />
+          <AdminBookingsList
+            onOpenMaintenanceModal={() => setMaintenanceModalOpen(true)}
+            onOpenReportModal={() => setReportModalOpen(true)}
+          />
         )}
 
         {adminSection === "users" && (
@@ -678,6 +683,13 @@ export default function DashboardPage() {
       <MaintenanceModal
         isOpen={maintenanceModalOpen}
         onClose={() => setMaintenanceModalOpen(false)}
+        resources={resources}
+      />
+
+      {/* Modal Raport lunar financiar și grad ocupare (IP-49) */}
+      <MonthlyReportModal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
         resources={resources}
       />
     </div>
