@@ -89,57 +89,101 @@ async function handleResult<T>(promise: Promise<{ data?: T; error?: unknown; res
 export const apiClient = {
   auth: {
     login: async (email: string, password: string) => {
-      try {
-        const res = await api.POST("/auth/login", {
-          body: { email: email.trim(), password },
-        });
-        if (res.data?.accessToken) {
-          return res.data;
-        }
-        if (res.error) {
-          throw res.error;
-        }
-      } catch (err: unknown) {
-        const status = (err as { status?: number })?.status;
-        if (status === 422) {
-          const formBody = new URLSearchParams();
-          formBody.append("username", email.trim());
-          formBody.append("password", password);
+      // Backend-ul FastAPI folosește fluxul OAuth2 Password Request Form (application/x-www-form-urlencoded)
+      const formBody = new URLSearchParams();
+      formBody.append("username", email.trim());
+      formBody.append("password", password);
 
-          const rawRes = await fetch(`${API_BASE_URL}/auth/login`, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: formBody.toString(),
-          });
-          const rawData = await rawRes.json();
-          if (!rawRes.ok) {
-            throw new ApiError(rawRes.status, mapeazaEroareApi(rawData), rawData.detail);
-          }
-          return {
-            accessToken: (rawData.access_token || rawData.accessToken) as string,
-            tokenType: (rawData.token_type || rawData.tokenType || "bearer") as string,
-          };
+      try {
+        const rawRes = await fetch(`${API_BASE_URL}/auth/login`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: formBody.toString(),
+        });
+
+        const rawData = await rawRes.json().catch(() => ({}));
+        if (!rawRes.ok) {
+          const detail = rawData?.detail || rawData?.message;
+          const status = rawRes.status;
+          throw new ApiError(status, mapeazaEroareApi({ status, detail }), typeof detail === "string" ? detail : undefined);
         }
-        throw new ApiError(status || 401, mapeazaEroareApi(err));
+
+        const accessToken = (rawData.access_token || rawData.accessToken) as string;
+        const tokenType = (rawData.token_type || rawData.tokenType || "bearer") as string;
+
+        if (!accessToken) {
+          throw new ApiError(401, "Nu s-a primit un token valid de la server.");
+        }
+
+        return { accessToken, tokenType };
+      } catch (err: unknown) {
+        if (err instanceof ApiError) {
+          throw err;
+        }
+        throw new ApiError(401, mapeazaEroareApi(err));
       }
-      throw new ApiError(401, "Nu s-a primit un token valid.");
     },
 
     register: async (data: { email: string; password: string; fullName: string; phone?: string }) => {
-      return handleResult(
-        api.POST("/auth/register", {
-          body: {
-            email: data.email.trim(),
-            password: data.password,
-            fullName: data.fullName.trim(),
-            phone: data.phone?.trim() || undefined,
-          },
-        })
-      );
+      const parts = data.fullName.trim().split(" ");
+      const firstName = parts[0] || data.fullName.trim();
+      const lastName = parts.slice(1).join(" ") || "Student";
+
+      const rawRes = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: data.email.trim(),
+          password: data.password,
+          firstName,
+          lastName,
+          first_name: firstName,
+          last_name: lastName,
+          fullName: data.fullName.trim(),
+          phone: data.phone?.trim() || undefined,
+        }),
+      });
+
+      const rawData = await rawRes.json().catch(() => ({}));
+      if (!rawRes.ok) {
+        const detail = rawData?.detail || rawData?.message;
+        const status = rawRes.status;
+        throw new ApiError(status, mapeazaEroareApi({ status, detail }), typeof detail === "string" ? detail : undefined);
+      }
+
+      return rawData as User;
     },
 
     me: async (): Promise<User> => {
-      return handleResult(api.GET("/users/me"));
+      const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
+      const rawRes = await fetch(`${API_BASE_URL}/users/me`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!rawRes.ok) {
+        const rawData = await rawRes.json().catch(() => ({}));
+        throw new ApiError(rawRes.status, "Sesiunea a expirat sau este invalidă.", rawData?.detail);
+      }
+
+      const data = await rawRes.json();
+      return {
+        ...data,
+        fullName:
+          data.fullName ||
+          `${data.firstName || data.first_name || ""} ${data.lastName || data.last_name || ""}`.trim() ||
+          data.email,
+        firstName: data.firstName || data.first_name || "",
+        lastName: data.lastName || data.last_name || "",
+        isBlocked: Boolean(data.isBlocked ?? data.blocked ?? false),
+        role: (data.role || "student").toLowerCase(),
+      } as User;
     },
   },
 

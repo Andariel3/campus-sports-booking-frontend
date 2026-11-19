@@ -64,7 +64,16 @@ export function mapeazaEroareApi(err: unknown): string {
   }
 
   // 4. Neautorizat (401)
-  if (status === 401 || detailLower.includes("unauthorized") || detailLower.includes("token")) {
+  if (
+    status === 401 ||
+    detailLower.includes("unauthorized") ||
+    detailLower.includes("token") ||
+    detailLower.includes("gresita") ||
+    detailLower.includes("parola")
+  ) {
+    if (detailLower.includes("gresit") || detailLower.includes("parola") || detailLower.includes("incorect")) {
+      return "Emailul sau parola este incorectă. Te rugăm să verifici datele introduse.";
+    }
     return "Sesiunea ta a expirat sau datele de autentificare sunt incorecte.";
   }
 
