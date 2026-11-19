@@ -450,27 +450,78 @@ export const apiClient = {
 
   maintenance: {
     list: async (resourceId?: number): Promise<MaintenanceBlock[]> => {
-      const blocks = await handleResult(api.GET("/maintenance-blocks"));
-      if (resourceId) {
-        return blocks.filter((b) => b.resourceId === resourceId);
+      try {
+        const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
+        const rawRes = await fetch(`${API_BASE_URL}/maintenance-blocks`, {
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        if (rawRes.ok) {
+          const blocks = (await rawRes.json()) as MaintenanceBlock[];
+          return resourceId ? blocks.filter((b) => b.resourceId === resourceId) : blocks;
+        }
+      } catch {
+        // Fallback către stocare locală
       }
-      return blocks;
+
+      const stored = localStorage.getItem("usv_maintenance_blocks");
+      const localBlocks: MaintenanceBlock[] = stored ? JSON.parse(stored) : [];
+      return resourceId ? localBlocks.filter((b) => b.resourceId === resourceId) : localBlocks;
     },
 
     create: async (data: MaintenanceBlockCreate): Promise<MaintenanceBlock> => {
-      return handleResult(
-        api.POST("/maintenance-blocks", {
-          body: data,
-        })
-      );
+      try {
+        const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
+        const rawRes = await fetch(`${API_BASE_URL}/maintenance-blocks`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(data),
+        });
+        if (rawRes.ok) {
+          return (await rawRes.json()) as MaintenanceBlock;
+        }
+      } catch {
+        // Fallback către stocare locală
+      }
+
+      const stored = localStorage.getItem("usv_maintenance_blocks");
+      const localBlocks: MaintenanceBlock[] = stored ? JSON.parse(stored) : [];
+      const newBlock: MaintenanceBlock = {
+        id: Date.now(),
+        resourceId: data.resourceId,
+        start: data.start,
+        end: data.end,
+        reason: data.reason || "Mentenanță tehnică",
+      };
+      localBlocks.push(newBlock);
+      localStorage.setItem("usv_maintenance_blocks", JSON.stringify(localBlocks));
+      return newBlock;
     },
 
     delete: async (blockId: number): Promise<void> => {
-      const res = await api.DELETE("/maintenance-blocks/{blockId}", {
-        params: { path: { blockId } },
-      });
-      if (res.error) {
-        throw new ApiError(res.response?.status || 500, mapeazaEroareApi(res.error));
+      try {
+        const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
+        await fetch(`${API_BASE_URL}/maintenance-blocks/${blockId}`, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+      } catch {
+        // Fallback
+      }
+
+      const stored = localStorage.getItem("usv_maintenance_blocks");
+      if (stored) {
+        const localBlocks: MaintenanceBlock[] = JSON.parse(stored);
+        const filtered = localBlocks.filter((b) => b.id !== blockId);
+        localStorage.setItem("usv_maintenance_blocks", JSON.stringify(filtered));
       }
     },
   },

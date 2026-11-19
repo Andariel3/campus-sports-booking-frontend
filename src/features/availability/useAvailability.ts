@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/api/client";
 import type { AvailabilitySlot, SlotStatus } from "@/api/types";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "/api/v1";
@@ -120,6 +121,8 @@ export function useAvailability({ resourceId, dateStr, enabled = true }: UseAvai
         const data = await rawRes.json();
         const rawSlots = data.slots || (Array.isArray(data) ? data : []);
 
+        const maintenanceBlocks = await apiClient.maintenance.list(resourceId).catch(() => []);
+
         if (rawSlots.length > 0) {
           const now = new Date();
           return rawSlots.map((s: { start: string; end: string; status: SlotStatus }) => {
@@ -129,8 +132,19 @@ export function useAvailability({ resourceId, dateStr, enabled = true }: UseAvai
             const endHour = endDate.getHours();
             let status = s.status;
 
-            // Dacă este astăzi și ora a trecut deja, marcăm ca ocupat
-            if (startDate < now && status === "liber") {
+            // Verificare dacă slotul se suprapune cu un blocaj activ de mentenanță
+            const isBlockedByMaintenance = maintenanceBlocks.some((b) => {
+              const bStart = new Date(b.start).getTime();
+              const bEnd = new Date(b.end).getTime();
+              const sStart = startDate.getTime();
+              const sEnd = endDate.getTime();
+              return sStart < bEnd && sEnd > bStart;
+            });
+
+            if (isBlockedByMaintenance) {
+              status = "mentenanta";
+            } else if (startDate < now && status === "liber") {
+              // Dacă este astăzi și ora a trecut deja, marcăm ca ocupat
               status = "ocupat";
             }
 
