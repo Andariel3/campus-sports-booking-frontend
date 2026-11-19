@@ -15,7 +15,8 @@ import {
   ShieldAlert, 
   Sparkles, 
   CheckCircle2, 
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -50,8 +51,8 @@ export function BookingPage() {
 
   const targetResourceId = facility?.id ?? parsedId ?? 1;
 
-  // Preluare disponibilitate orar prin hook-ul dedicat cu polling la 20s
-  const { data: slots = [], isLoading: isLoadingSlots } = useAvailability({
+  // Preluare disponibilitate orar prin hook-ul dedicat cu polling scurt și SSE/BroadcastChannel
+  const { data: slots = [], isLoading: isLoadingSlots, isFetching: isFetchingSlots, refetch: refetchSlots } = useAvailability({
     resourceId: targetResourceId,
     dateStr,
     enabled: Boolean(targetResourceId),
@@ -254,12 +255,27 @@ export function BookingPage() {
           <div>
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-foreground">Intervale orare</h3>
-              <span className="text-xs text-muted-foreground">
-                Actualizare live la 20s
-              </span>
+              <div className="flex items-center gap-2">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[11px] text-emerald-700 font-bold">Live</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => refetchSlots()}
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                  title="Actualizează acum orarul"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${isFetchingSlots ? "animate-spin text-[#0F52BA]" : ""}`} />
+                </Button>
+              </div>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Selectează un interval liber pentru a continua cu rezervarea.
+              Selectează un interval liber pentru a continua cu rezervarea. Orarul se actualizează automat fără refresh.
             </p>
           </div>
 
