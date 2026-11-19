@@ -1,14 +1,12 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/features/auth/useAuth";
 import { 
   Dumbbell, 
   Clock, 
   MapPin, 
   Search, 
-  LayoutDashboard, 
-  LogIn, 
-  LogOut, 
   RefreshCw, 
   AlertCircle, 
   Sparkles, 
@@ -45,24 +43,7 @@ export default function FacilitiesPage() {
   const [selectedSport, setSelectedSport] = useState("toate");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFacility, setActiveFacility] = useState<Resource | null>(null);
-  const [currentUser, setCurrentUser] = useState<{ fullName: string; role: string; email: string } | null>(null);
-
-  useEffect(() => {
-    const saved = sessionStorage.getItem("usv_user");
-    if (saved) {
-      try {
-        setCurrentUser(JSON.parse(saved));
-      } catch {
-        setCurrentUser(null);
-      }
-    }
-  }, []);
-
-  const handleLogout = () => {
-    sessionStorage.removeItem("usv_user");
-    sessionStorage.removeItem("usv_token");
-    setCurrentUser(null);
-  };
+  const { user: currentUser } = useAuth();
 
   // Preluare date din backend: GET /api/v1/resources
   const {
@@ -98,62 +79,7 @@ export default function FacilitiesPage() {
   }, [resources, selectedSport, searchQuery]);
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-[#0f172a] flex flex-col">
-      {/* ───── Bara de sus & Navigație ───── */}
-      <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/90 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-8">
-          <Link to="/" className="flex items-center gap-3 group">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#0b5cad] to-[#034078] text-white shadow-sm transition-transform duration-200 group-hover:scale-105">
-              <Dumbbell className="h-5 w-5" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-lg font-black tracking-tight text-[#0f172a]">USV Sport</span>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-[#0b5cad]">
-                Baza Sportivă Universitară
-              </span>
-            </div>
-          </Link>
-
-          {/* Indicator backend & Acțiuni rapide */}
-          <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/80 px-3 py-1 text-xs font-medium text-emerald-700">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-              </span>
-              <span>Backend Conectat (Port 8000)</span>
-            </div>
-
-            <Button asChild variant="outline" size="sm" className="border-slate-300 text-slate-700 hover:bg-slate-100 font-medium">
-              <Link to="/dashboard" className="flex items-center gap-1.5">
-                <LayoutDashboard className="h-4 w-4 text-[#0b5cad]" />
-                <span className="hidden sm:inline">Panou Bază de Date</span>
-                <span className="sm:hidden">Tabel</span>
-              </Link>
-            </Button>
-
-            {currentUser ? (
-              <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-                <div className="hidden sm:block text-right">
-                  <div className="text-xs font-bold text-slate-900 leading-tight">{currentUser.fullName}</div>
-                  <div className="text-[10px] text-slate-500 capitalize">{currentUser.role}</div>
-                </div>
-                <Button variant="ghost" size="sm" onClick={handleLogout} className="text-slate-500 hover:text-red-600 p-2" title="Deconectare">
-                  <LogOut className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <Button asChild size="sm" className="bg-[#0b5cad] hover:bg-[#094b8f] text-white shadow-sm font-medium">
-                <Link to="/login" className="flex items-center gap-1.5">
-                  <LogIn className="h-4 w-4" />
-                  <span>Autentificare</span>
-                </Link>
-              </Button>
-            )}
-          </div>
-        </div>
-      </header>
-
+    <div className="w-full">
       {/* ───── Hero Banner ───── */}
       <section className="relative overflow-hidden bg-gradient-to-br from-[#0b5cad] via-[#084887] to-[#032b53] py-12 px-4 sm:px-8 text-white">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
@@ -163,10 +89,10 @@ export default function FacilitiesPage() {
             <div className="max-w-2xl space-y-3">
               <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-sky-200 backdrop-blur-md">
                 <Sparkles className="h-3.5 w-3.5 text-amber-300" />
-                <span>Universitatea „Ștefan cel Mare” din Suceava</span>
+                <span>{currentUser ? `Salut, ${currentUser.fullName}` : "Universitatea „Ștefan cel Mare” din Suceava"}</span>
               </div>
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight">
-                Terenuri și Bazin Olimpic la standarde moderne
+                {currentUser ? `Salut, ${currentUser.fullName.split(" ")[0]}. Ce sport alegi azi?` : "Ce sport alegi azi?"}
               </h1>
               <p className="text-sm sm:text-base text-sky-100 font-normal leading-relaxed">
                 Platforma oficială de rezervări pentru studenți, cadre didactice și comunitate. Verifică orarul și disponibilitatea în timp real direct din baza de date.
@@ -447,17 +373,7 @@ export default function FacilitiesPage() {
         )}
       </Dialog>
 
-      {/* ───── Footer ───── */}
-      <footer className="mt-auto border-t border-slate-200 bg-white py-8 text-xs text-slate-500">
-        <div className="mx-auto max-w-7xl px-4 sm:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p>© {new Date().getFullYear()} USV Sport · Universitatea „Ștefan cel Mare” din Suceava</p>
-          <div className="flex items-center gap-6">
-            <span className="hover:text-slate-900 cursor-pointer">Regulament bază</span>
-            <span className="hover:text-slate-900 cursor-pointer">Tarife & reduceri</span>
-            <span className="hover:text-slate-900">Contact: baza.sportiva@usv.ro</span>
-          </div>
-        </div>
-      </footer>
+      {/* Dialog Detalii Facilitate */}
     </div>
   );
 }

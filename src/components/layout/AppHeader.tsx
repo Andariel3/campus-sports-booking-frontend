@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+import type { User as ApiUser } from "@/api/types";
+
 export interface HeaderUser {
   id: number;
   email: string;
@@ -15,7 +17,7 @@ export interface HeaderUser {
 }
 
 interface AppHeaderProps {
-  user?: HeaderUser | null;
+  user?: ApiUser | HeaderUser | null;
   onLogout?: () => void;
 }
 

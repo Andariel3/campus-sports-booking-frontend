@@ -1,13 +1,11 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
 import { 
   Plus, 
   Trash2, 
   Edit3, 
   RefreshCw, 
   Dumbbell, 
-  ArrowLeft, 
   Clock, 
   Search,
   CheckCircle2, 
@@ -228,36 +226,19 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-[#0f172a] flex flex-col">
-      {/* Header */}
-      <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-8">
-          <div className="flex items-center gap-3">
-            <Link to="/" className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#0b5cad] text-white shadow-sm hover:scale-105 transition-transform">
-              <Dumbbell className="h-5 w-5" />
-            </Link>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-base tracking-tight">USV Sport</span>
-                <span className="rounded-md bg-blue-100 text-[#0b5cad] px-2 py-0.5 text-[11px] font-bold">
-                  Dashboard Administrare
-                </span>
-              </div>
-            </div>
+    <div className="w-full">
+      {/* Subheader Administrare */}
+      <div className="border-b border-border bg-card px-4 py-4 sm:px-8">
+        <div className="mx-auto flex max-w-7xl items-center justify-between">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Administrare Bază Sportivă</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">Gestionează resursele sportive, disponibilitatea și orarele din campus</p>
           </div>
-
-          <div className="flex items-center gap-3">
-            <Button asChild variant="ghost" size="sm" className="text-slate-600 hover:text-slate-900">
-              <Link to="/" className="flex items-center gap-1.5 text-xs font-semibold">
-                <ArrowLeft className="h-4 w-4" /> Înapoi la site
-              </Link>
-            </Button>
-            <Button onClick={handleOpenAdd} size="sm" className="bg-[#0b5cad] hover:bg-[#094b8f] text-white shadow-sm font-semibold">
-              <Plus className="h-4 w-4 mr-1.5" /> Adaugă resursă
-            </Button>
-          </div>
+          <Button onClick={handleOpenAdd} size="sm" className="bg-primary hover:bg-primary-hover text-white shadow-xs font-semibold">
+            <Plus className="h-4 w-4 mr-1.5" /> Adaugă resursă
+          </Button>
         </div>
-      </header>
+      </div>
 
       {/* Mesaj Toast Notificare */}
       {toastMessage && (
