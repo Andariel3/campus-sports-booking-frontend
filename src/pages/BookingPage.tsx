@@ -1,15 +1,17 @@
 import { useState, useMemo } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useParams, Link } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ro } from "date-fns/locale";
 import { apiClient } from "@/api/client";
 import { useAuth } from "@/features/auth/useAuth";
-import type { Resource, AvailabilitySlot } from "@/api/types";
+import type { Resource, AvailabilitySlot, Reservation } from "@/api/types";
 import { getSportImage } from "@/lib/sportImages";
 import { DateStrip } from "@/features/availability/DateStrip";
 import { TimeSlotGrid } from "@/features/availability/TimeSlotGrid";
-import { useAvailability } from "@/features/availability/useAvailability";
+import { useAvailability, notifyAvailabilityChange } from "@/features/availability/useAvailability";
+import { BookingVerificationModal } from "@/features/reservations/BookingVerificationModal";
+import { BookingConfirmationView } from "@/features/reservations/BookingConfirmationView";
 import { 
   ArrowLeft, 
   ShieldAlert, 
@@ -22,16 +24,21 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 
 export function BookingPage() {
   const { resourceId } = useParams();
-  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user, isStudent, isBlocked } = useAuth();
 
   // Data selectată (implicit azi)
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   // Slotul orar selectat de utilizator
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
+
+  // Stare pentru modalul de verificare și rezervarea confirmată
+  const [isVerificationOpen, setIsVerificationOpen] = useState(false);
+  const [confirmedReservation, setConfirmedReservation] = useState<Reservation | null>(null);
 
   const dateStr = format(selectedDate, "yyyy-MM-dd");
 
@@ -52,7 +59,12 @@ export function BookingPage() {
   const targetResourceId = facility?.id ?? parsedId ?? 1;
 
   // Preluare disponibilitate orar prin hook-ul dedicat cu polling scurt și SSE/BroadcastChannel
-  const { data: slots = [], isLoading: isLoadingSlots, isFetching: isFetchingSlots, refetch: refetchSlots } = useAvailability({
+  const {
+    data: slots = [],
+    isLoading: isLoadingSlots,
+    isFetching: isFetchingSlots,
+    refetch: refetchSlots,
+  } = useAvailability({
     resourceId: targetResourceId,
     dateStr,
     enabled: Boolean(targetResourceId),
@@ -74,8 +86,37 @@ export function BookingPage() {
   // Calcul total de plată
   const durationHours = selectedSlot ? selectedSlot.endHour - selectedSlot.startHour : 1;
   const totalPrice = facility ? (facility.pricePerHour || 40) * durationHours : 40;
-
   const nextReservationIndex = Math.min(maxMonthlyLimit, studentReservationsCount + 1);
+
+  // Mutație pentru crearea rezervării
+  const createReservationMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedSlot || !facility) throw new Error("Nu este selectat niciun interval.");
+
+      const start = `${dateStr}T${String(selectedSlot.startHour).padStart(2, "0")}:00:00`;
+      const end = `${dateStr}T${String(selectedSlot.endHour).padStart(2, "0")}:00:00`;
+
+      return apiClient.reservations.create({
+        resourceId: facility.id,
+        start,
+        end,
+      });
+    },
+    onSuccess: (newReservation) => {
+      // Notificare multi-tab și invalidare query-uri
+      notifyAvailabilityChange(facility!.id, dateStr);
+      queryClient.invalidateQueries({ queryKey: ["availability", facility!.id, dateStr] });
+      queryClient.invalidateQueries({ queryKey: ["myReservations"] });
+      queryClient.invalidateQueries({ queryKey: ["adminReservations"] });
+
+      setIsVerificationOpen(false);
+      setConfirmedReservation(newReservation);
+      toast.success("Rezervarea a fost confirmată cu succes!");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "A apărut o eroare la salvarea rezervării.");
+    },
+  });
 
   const handleSelectSlot = (slot: AvailabilitySlot) => {
     if (
@@ -89,37 +130,22 @@ export function BookingPage() {
     }
   };
 
-  const handleProceedToConfirmation = () => {
+  const handleOpenVerification = () => {
     if (!selectedSlot || !facility) return;
-    // Navigare către pasul de confirmare sau declanșare modal
-    const startStr = `${dateStr}T${String(selectedSlot.startHour).padStart(2, "0")}:00:00`;
-    const endStr = `${dateStr}T${String(selectedSlot.endHour).padStart(2, "0")}:00:00`;
-    
-    // Stocăm temporar selecția pentru fluxul de creare
-    sessionStorage.setItem(
-      "usv_pending_booking",
-      JSON.stringify({
-        facility,
-        selectedDate: dateStr,
-        slot: selectedSlot,
-        startStr,
-        endStr,
-        totalPrice,
-      })
-    );
-
-    // Navigare sau declanșare modal în IP-44
-    navigate(`/rezerva/${facility.id}/confirmare`, {
-      state: {
-        facility,
-        selectedDate: dateStr,
-        slot: selectedSlot,
-        startStr,
-        endStr,
-        totalPrice,
-      },
-    });
+    setIsVerificationOpen(true);
   };
+
+  // Dacă rezervarea a fost confirmată, afișăm ecranul de confirmare conform Wireframe W4
+  if (confirmedReservation && facility && selectedSlot) {
+    return (
+      <BookingConfirmationView
+        reservation={confirmedReservation}
+        facility={facility}
+        selectedDate={selectedDate}
+        slot={selectedSlot}
+      />
+    );
+  }
 
   if (isLoadingResources) {
     return (
@@ -245,7 +271,7 @@ export function BookingPage() {
             selectedDate={selectedDate}
             onSelectDate={(newDate) => {
               setSelectedDate(newDate);
-              setSelectedSlot(null); // Resetează intervalul când se schimbă ziua
+              setSelectedSlot(null);
             }}
           />
         </Card>
@@ -320,7 +346,7 @@ export function BookingPage() {
 
             {/* Buton confirmare */}
             <Button
-              onClick={handleProceedToConfirmation}
+              onClick={handleOpenVerification}
               disabled={!selectedSlot || isLimitReached || isBlocked}
               className="w-full h-12 rounded-xl bg-[#0F52BA] hover:bg-[#1E40AF] text-white font-bold text-sm shadow-md shadow-[#0F52BA]/20 transition-all disabled:opacity-50"
             >
@@ -329,6 +355,24 @@ export function BookingPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ───── Modalul Verifică Rezervarea conform Wireframe W3/W4 ───── */}
+      {facility && selectedSlot && (
+        <BookingVerificationModal
+          isOpen={isVerificationOpen}
+          onClose={() => setIsVerificationOpen(false)}
+          onConfirm={async () => {
+            await createReservationMutation.mutateAsync();
+          }}
+          facility={facility}
+          selectedDate={selectedDate}
+          selectedSlot={selectedSlot}
+          totalPrice={totalPrice}
+          isSubmitting={createReservationMutation.isPending}
+          studentReservationsCount={studentReservationsCount}
+          maxMonthlyLimit={maxMonthlyLimit}
+        />
+      )}
     </div>
   );
 }
