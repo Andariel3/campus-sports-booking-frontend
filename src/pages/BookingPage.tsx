@@ -359,7 +359,10 @@ export function BookingPage() {
       {facility && selectedSlot && (
         <BookingVerificationModal
           isOpen={isVerificationOpen}
-          onClose={() => setIsVerificationOpen(false)}
+          onClose={() => {
+            setIsVerificationOpen(false);
+            createReservationMutation.reset();
+          }}
           onConfirm={async () => {
             await createReservationMutation.mutateAsync();
           }}
@@ -368,6 +371,7 @@ export function BookingPage() {
           selectedSlot={selectedSlot}
           totalPrice={totalPrice}
           isSubmitting={createReservationMutation.isPending}
+          errorMessage={createReservationMutation.error ? (createReservationMutation.error as Error).message : null}
           studentReservationsCount={studentReservationsCount}
           maxMonthlyLimit={maxMonthlyLimit}
         />

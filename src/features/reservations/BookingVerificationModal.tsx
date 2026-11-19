@@ -8,11 +8,13 @@ import {
   CreditCard, 
   Sparkles, 
   Loader2, 
-  Info 
+  Info,
+  AlertCircle 
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface BookingVerificationModalProps {
   isOpen: boolean;
@@ -25,6 +27,7 @@ interface BookingVerificationModalProps {
   isSubmitting?: boolean;
   studentReservationsCount?: number;
   maxMonthlyLimit?: number;
+  errorMessage?: string | null;
 }
 
 export function BookingVerificationModal({
@@ -38,6 +41,7 @@ export function BookingVerificationModal({
   isSubmitting = false,
   studentReservationsCount = 2,
   maxMonthlyLimit = 3,
+  errorMessage = null,
 }: BookingVerificationModalProps) {
   if (!selectedSlot) return null;
 
@@ -139,6 +143,13 @@ export function BookingVerificationModal({
             <p>• Anulare gratuită cu minim 2 ore înainte de ora de începere.</p>
             <p>• Te rugăm să te prezinți la bază cu 15 minute înainte.</p>
           </div>
+
+          {errorMessage && (
+            <Alert variant="destructive" className="py-2.5 px-3 rounded-xl border-rose-200 bg-rose-50/90 text-rose-800 text-xs">
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+              <AlertDescription className="font-medium">{errorMessage}</AlertDescription>
+            </Alert>
+          )}
 
           {/* Butoane de acțiune */}
           <div className="pt-2 space-y-2">

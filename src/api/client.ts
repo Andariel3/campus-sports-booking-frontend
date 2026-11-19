@@ -1,4 +1,4 @@
-       import createClient, { type Middleware } from "openapi-fetch";
+import createClient, { type Middleware } from "openapi-fetch";
 import type { paths } from "./schema";
 import type {
   Resource,
@@ -243,57 +243,133 @@ export const apiClient = {
   },
 
   reservations: {
-    list: async (_params?: {
+    list: async (params?: {
       status?: "ACTIVA" | "ANULATA" | "FINALIZATA" | "NEPREZENTARE";
       resourceId?: number;
       from?: string;
       to?: string;
     }): Promise<Reservation[]> => {
-      const res = await handleResult(api.GET("/reservations"));
-      if (!_params) return res;
-      return res.filter((r) => {
-        if (_params.status && r.status !== _params.status) return false;
-        if (_params.resourceId && r.resourceId !== _params.resourceId) return false;
-        const resDate = r.start.split("T")[0];
-        if (_params.from && resDate && resDate < _params.from) return false;
-        if (_params.to && resDate && resDate > _params.to) return false;
-        return true;
+      const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
+      const url = new URL(`${API_BASE_URL}/reservations`, window.location.origin);
+      if (params?.status) url.searchParams.append("status", params.status);
+      if (params?.resourceId) url.searchParams.append("resourceId", String(params.resourceId));
+      if (params?.from) url.searchParams.append("from", params.from);
+      if (params?.to) url.searchParams.append("to", params.to);
+
+      const rawRes = await fetch(url.toString(), {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       });
+
+      if (!rawRes.ok) {
+        const errorData = await rawRes.json().catch(() => ({}));
+        throw new ApiError(rawRes.status, mapeazaEroareApi(errorData), errorData?.detail);
+      }
+      const listData = (await rawRes.json()) as Reservation[];
+      return listData.map((r) => ({
+        ...r,
+        resourceId: r.resourceId || r.resource?.id || 0,
+        resourceName: r.resourceName || r.resource?.name || "Facilitate USV",
+        amount: r.amount ?? r.totalPrice ?? 0,
+        totalPrice: r.totalPrice ?? r.amount ?? 0,
+      }));
     },
 
     get: async (id: number): Promise<Reservation> => {
-      return handleResult(
-        api.GET("/reservations/{reservationId}", {
-          params: { path: { reservationId: id } },
-        })
-      );
+      const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
+      const rawRes = await fetch(`${API_BASE_URL}/reservations/${id}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!rawRes.ok) {
+        const errorData = await rawRes.json().catch(() => ({}));
+        throw new ApiError(rawRes.status, mapeazaEroareApi(errorData), errorData?.detail);
+      }
+      const r = (await rawRes.json()) as Reservation;
+      return {
+        ...r,
+        resourceId: r.resourceId || r.resource?.id || 0,
+        resourceName: r.resourceName || r.resource?.name || "Facilitate USV",
+        amount: r.amount ?? r.totalPrice ?? 0,
+        totalPrice: r.totalPrice ?? r.amount ?? 0,
+      };
     },
 
     create: async (data: ReservationCreate): Promise<Reservation> => {
-      return handleResult(
-        api.POST("/reservations", {
-          body: data,
-        })
-      );
+      const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
+      const rawRes = await fetch(`${API_BASE_URL}/reservations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          resourceId: data.resourceId,
+          start: data.start,
+          end: data.end,
+        }),
+      });
+
+      const rawData = await rawRes.json().catch(() => ({}));
+      if (!rawRes.ok) {
+        const detail = rawData?.detail || rawData?.message;
+        throw new ApiError(
+          rawRes.status,
+          mapeazaEroareApi({ status: rawRes.status, detail }),
+          typeof detail === "string" ? detail : undefined
+        );
+      }
+      return rawData as Reservation;
     },
 
     cancel: async (id: number): Promise<Reservation> => {
-      const res = await api.DELETE("/reservations/{reservationId}", {
-        params: { path: { reservationId: id } },
+      const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
+      const rawRes = await fetch(`${API_BASE_URL}/reservations/${id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       });
-      if (res.error) {
-        throw new ApiError(res.response?.status || 500, mapeazaEroareApi(res.error));
+
+      const rawData = await rawRes.json().catch(() => ({}));
+      if (!rawRes.ok) {
+        const detail = rawData?.detail || rawData?.message;
+        throw new ApiError(
+          rawRes.status,
+          mapeazaEroareApi({ status: rawRes.status, detail }),
+          typeof detail === "string" ? detail : undefined
+        );
       }
-      return res.data as Reservation;
+      return rawData as Reservation;
     },
 
     setPayment: async (id: number, paymentStatus: PaymentStatus): Promise<Reservation> => {
-      return handleResult(
-        api.PATCH("/reservations/{reservationId}/payment", {
-          params: { path: { reservationId: id } },
-          body: { paymentStatus },
-        })
-      );
+      const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
+      const rawRes = await fetch(`${API_BASE_URL}/reservations/${id}/payment`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ paymentStatus }),
+      });
+
+      const rawData = await rawRes.json().catch(() => ({}));
+      if (!rawRes.ok) {
+        const detail = rawData?.detail || rawData?.message;
+        throw new ApiError(
+          rawRes.status,
+          mapeazaEroareApi({ status: rawRes.status, detail }),
+          typeof detail === "string" ? detail : undefined
+        );
+      }
+      return rawData as Reservation;
     },
 
     markNoShow: async (id: number): Promise<Reservation> => {

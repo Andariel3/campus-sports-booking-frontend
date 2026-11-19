@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/api/client";
 import type { AvailabilitySlot, SlotStatus } from "@/api/types";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "/api/v1";
@@ -30,7 +29,7 @@ export function notifyAvailabilityChange(resourceId: number, dateStr?: string) {
  * Hook avansat pentru actualizarea orarului în timp real.
  * Combină:
  * 1. SSE (Server-Sent Events) către /api/v1/events/availability/{resourceId} dacă backend-ul îl suportă
- * 2. Polling inteligent la 10 secunde (refetchInterval)
+ * 2. Polling inteligent la 8 secunde (refetchInterval)
  * 3. Reîncărcare imediată la revenirea în tab (refetchOnWindowFocus)
  * 4. Sincronizare automată multi-tab via BroadcastChannel
  */
@@ -79,15 +78,13 @@ export function useAvailability({ resourceId, dateStr, enabled = true }: UseAvai
       };
 
       eventSource.onerror = () => {
-        // Dacă serverul nu suportă SSE (404/Refused), închidem conexiunea;
-        // polling-ul inteligent de mai jos garantează actualizarea continuă.
         if (eventSource) {
           eventSource.close();
           eventSource = null;
         }
       };
     } catch {
-      // Fallback silențios către polling
+      // Fallback către polling
     }
 
     return () => {
@@ -97,26 +94,54 @@ export function useAvailability({ resourceId, dateStr, enabled = true }: UseAvai
     };
   }, [queryClient, queryKey, enabled, resourceId]);
 
-  // 3. React Query cu polling inteligent scurt la 10 secunde și refetch la focus
+  // 3. React Query cu preluare directă din endpoint-ul backend /resources/{resourceId}/availability?date=YYYY-MM-DD
   return useQuery({
     queryKey,
     enabled: enabled && resourceId > 0 && Boolean(dateStr),
-    refetchInterval: 10000, // 10 secunde pentru actualizare în timp real garantată
-    refetchIntervalInBackground: false, // Pauză când tab-ul e ascuns pentru economie de resurse
-    refetchOnWindowFocus: true, // Sincronizare instantanee la revenirea utilizatorului în aplicație
+    refetchInterval: 8000, // 8 secunde pentru actualizare în timp real garantată
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
     refetchOnReconnect: true,
-    staleTime: 5000,
-    queryFn: async () => {
+    staleTime: 3000,
+    queryFn: async (): Promise<AvailabilitySlot[]> => {
       try {
-        const res = await api.GET("/resources/{resourceId}/availability", {
-          params: {
-            path: { resourceId },
-            query: { date: dateStr },
+        const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
+        const rawRes = await fetch(`${API_BASE_URL}/resources/${resourceId}/availability?date=${dateStr}`, {
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         });
 
-        if (res.data && Array.isArray(res.data)) {
-          return res.data as AvailabilitySlot[];
+        if (!rawRes.ok) {
+          return generareSloturiImplicite(dateStr);
+        }
+
+        const data = await rawRes.json();
+        const rawSlots = data.slots || (Array.isArray(data) ? data : []);
+
+        if (rawSlots.length > 0) {
+          const now = new Date();
+          return rawSlots.map((s: { start: string; end: string; status: SlotStatus }) => {
+            const startDate = new Date(s.start);
+            const endDate = new Date(s.end);
+            const startHour = startDate.getHours();
+            const endHour = endDate.getHours();
+            let status = s.status;
+
+            // Dacă este astăzi și ora a trecut deja, marcăm ca ocupat
+            if (startDate < now && status === "liber") {
+              status = "ocupat";
+            }
+
+            return {
+              start: s.start,
+              end: s.end,
+              startHour,
+              endHour,
+              status,
+            };
+          });
         }
 
         return generareSloturiImplicite(dateStr);
@@ -128,8 +153,7 @@ export function useAvailability({ resourceId, dateStr, enabled = true }: UseAvai
 }
 
 /**
- * Generează intervalele orare standard între 08:00 și 22:00 în cazul în care serverul
- * nu are încă definit endpoint-ul /availability.
+ * Generează intervalele orare standard între 08:00 și 22:00 în caz de eroare temporară de rețea.
  */
 function generareSloturiImplicite(dateStr: string): AvailabilitySlot[] {
   const slots: AvailabilitySlot[] = [];
@@ -142,7 +166,6 @@ function generareSloturiImplicite(dateStr: string): AvailabilitySlot[] {
 
   for (let hour = 8; hour < 22; hour++) {
     let status: SlotStatus = "liber";
-    // Dacă este azi și ora a trecut deja, marcăm ca ocupat
     if (isToday && hour <= now.getHours()) {
       status = "ocupat";
     }

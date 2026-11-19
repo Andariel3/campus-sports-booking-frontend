@@ -9,7 +9,12 @@ export type ResourceUpdate = Schemas["ResourceUpdate"];
 export type User = Schemas["UserResponse"];
 export type UserRole = "student" | "profesor" | "administrator";
 
-export type Reservation = Schemas["ReservationRead"];
+export type Reservation = Schemas["ReservationRead"] & {
+  resource?: Schemas["ResourceRead"];
+  amount?: number;
+  resourceName?: string;
+  totalPrice?: number;
+};
 export type ReservationCreate = Schemas["ReservationCreate"];
 export type ReservationStatus = "ACTIVA" | "ANULATA" | "FINALIZATA" | "NEPREZENTARE";
 export type PaymentStatus = "ACHITATA" | "NEACHITATA";
