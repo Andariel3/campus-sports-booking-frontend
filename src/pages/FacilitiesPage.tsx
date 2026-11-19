@@ -2,50 +2,58 @@ import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/features/auth/useAuth";
+import { apiClient } from "@/api/client";
+import type { Resource, Reservation } from "@/api/types";
+import { getSportImage } from "@/lib/sportImages";
 import { 
   Dumbbell, 
   Clock, 
   MapPin, 
   Search, 
-  RefreshCw, 
-  AlertCircle, 
+  ArrowUpDown, 
   Sparkles, 
-  Check, 
-  ShieldCheck, 
-  ChevronRight
+  ChevronRight, 
+  Info,
+  CheckCircle2,
+  AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getSportImage } from "@/lib/sportImages";
+import { Progress } from "@/components/ui/progress";
 
-interface Resource {
-  id: number;
-  name: string;
-  type: string;
-  sport: string;
-  description: string | null;
-  pricePerHour: number | null;
-  openHour: string | null;
-  closeHour: string | null;
+// Categorii de filtrare cerute explicit în task: Toate, Fotbal, Tenis, Înot
+const SPORT_TABS = [
+  { id: "toate", label: "Toate" },
+  { id: "fotbal", label: "Fotbal" },
+  { id: "tenis", label: "Tenis" },
+  { id: "inot", label: "Înot" },
+] as const;
+
+type SportTabId = (typeof SPORT_TABS)[number]["id"];
+type SortOption = "default" | "price-asc" | "price-desc" | "name";
+
+// Subtitlu specific per sport conform prototipului
+function getFacilitySubtitle(sport: string, description?: string | null): string {
+  const s = (sport || "").toLowerCase();
+  if (s.includes("fotbal")) return "Sintetic · Nocturnă · 10 jucători";
+  if (s.includes("tenis")) return "Zgură · 2 - 4 jucători";
+  if (s.includes("inot") || s.includes("înot")) return "25 m · 6 culoare · Acoperit";
+  if (s.includes("baschet") || s.includes("volei")) return "Parchet · Suprafață omologată FIBA";
+  return description || "Baza Sportivă USV";
 }
 
-const SPORT_CATEGORIES = [
-  { id: "toate", label: "Toate sporturile", icon: "🏆" },
-  { id: "fotbal", label: "Fotbal", icon: "⚽" },
-  { id: "tenis", label: "Tenis", icon: "🎾" },
-  { id: "inot", label: "Înot", icon: "🏊‍♂️" },
-  { id: "baschet", label: "Baschet / Volei", icon: "🏀" },
-];
-
 export default function FacilitiesPage() {
-  const [selectedSport, setSelectedSport] = useState("toate");
+  const { user, isStudent, isBlocked } = useAuth();
+  const [selectedTab, setSelectedTab] = useState<SportTabId>("toate");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("default");
   const [activeFacility, setActiveFacility] = useState<Resource | null>(null);
-  const { user: currentUser } = useAuth();
 
-  // Preluare date din backend: GET /api/v1/resources
+  // Preluare resurse prin clientul API
   const {
     data: resources = [],
     isLoading,
@@ -54,244 +62,347 @@ export default function FacilitiesPage() {
   } = useQuery<Resource[]>({
     queryKey: ["resources"],
     queryFn: async () => {
-      const res = await fetch("/api/v1/resources");
-      if (!res.ok) throw new Error("Eroare la conectarea cu API-ul");
-      return res.json();
+      return apiClient.resources.list();
     },
   });
 
-  // Filtrare combinată (sport + căutare text)
-  const filtered = useMemo(() => {
-    return resources.filter((item) => {
-      const matchesSport =
-        selectedSport === "toate" ||
-        item.sport.toLowerCase().includes(selectedSport) ||
-        (selectedSport === "inot" && item.type === "bazin");
+  // Preluare rezervări active pentru calculul limitei lunare
+  const { data: myReservations = [] } = useQuery<Reservation[]>({
+    queryKey: ["myReservations"],
+    queryFn: async () => {
+      return apiClient.reservations.list();
+    },
+    enabled: Boolean(user),
+  });
 
-      const matchesSearch =
-        !searchQuery.trim() ||
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.sport.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
+  // Calcul rezervări luna curentă pentru student (implicit 2 conform wireframe-ului W2 dacă nu are rezervări)
+  const activeCount = myReservations.filter((r) => r.status === "ACTIVA" || r.status === "FINALIZATA").length;
+  const studentReservationsCount = user ? activeCount : 2;
+  const maxMonthlyLimit = 3;
+  const remainingReservations = Math.max(0, maxMonthlyLimit - studentReservationsCount);
+  const isLimitReached = isStudent && studentReservationsCount >= maxMonthlyLimit;
 
-      return matchesSport && matchesSearch;
-    });
-  }, [resources, selectedSport, searchQuery]);
+  // Filtrare și sortare
+  const filteredResources = useMemo(() => {
+    let list = [...resources];
+
+    // 1. Filtrare după tab-ul selectat
+    if (selectedTab !== "toate") {
+      list = list.filter((item) => {
+        const itemSport = (item.sport || "").toLowerCase();
+        if (selectedTab === "inot") {
+          return itemSport.includes("inot") || itemSport.includes("înot") || item.type === "bazin";
+        }
+        return itemSport.includes(selectedTab);
+      });
+    }
+
+    // 2. Filtrare după căutare
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (item) =>
+          item.name.toLowerCase().includes(q) ||
+          item.sport.toLowerCase().includes(q) ||
+          (item.description && item.description.toLowerCase().includes(q))
+      );
+    }
+
+    // 3. Sortare
+    if (sortBy === "price-asc") {
+      list.sort((a, b) => (a.pricePerHour || 0) - (b.pricePerHour || 0));
+    } else if (sortBy === "price-desc") {
+      list.sort((a, b) => (b.pricePerHour || 0) - (a.pricePerHour || 0));
+    } else if (sortBy === "name") {
+      list.sort((a, b) => a.name.localeCompare(b.name, "ro"));
+    }
+
+    return list;
+  }, [resources, selectedTab, searchQuery, sortBy]);
+
+  // Numele utilizatorului pentru salut conform wireframe: "Salut, Andrei. Ce sport alegi azi?"
+  const userGreetingName = user?.fullName
+    ? user.fullName.split(" ")[0]
+    : "Andrei";
 
   return (
-    <div className="w-full">
-      {/* ───── Hero Banner ───── */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-[#0b5cad] via-[#084887] to-[#032b53] py-12 px-4 sm:px-8 text-white">
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
-        
-        <div className="relative mx-auto max-w-7xl">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
-            <div className="max-w-2xl space-y-3">
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-sky-200 backdrop-blur-md">
-                <Sparkles className="h-3.5 w-3.5 text-amber-300" />
-                <span>{currentUser ? `Salut, ${currentUser.fullName}` : "Universitatea „Ștefan cel Mare” din Suceava"}</span>
+    <div className="w-full bg-[#F8FAFC]">
+      {/* ───── Secțiune Antet & Salut (Conform Wireframe W2) ───── */}
+      <section className="bg-white border-b border-border/70 py-6 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-6xl mx-auto space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-[#0F52BA]">
+                  <Sparkles className="h-3 w-3" />
+                  Baza Sportivă Universitară
+                </span>
               </div>
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight">
-                {currentUser ? `Salut, ${currentUser.fullName.split(" ")[0]}. Ce sport alegi azi?` : "Ce sport alegi azi?"}
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
+                Salut, {userGreetingName}. Ce sport alegi azi?
               </h1>
-              <p className="text-sm sm:text-base text-sky-100 font-normal leading-relaxed">
-                Platforma oficială de rezervări pentru studenți, cadre didactice și comunitate. Verifică orarul și disponibilitatea în timp real direct din baza de date.
+              <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                Verifică disponibilitatea în timp real și rezervă terenul dorit.
               </p>
             </div>
 
-            {/* Casetă căutare rapidă */}
-            <div className="w-full md:w-80 space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-sky-200">
-                Caută facilitate:
-              </label>
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Caută tenis, fotbal, bazin..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-xl bg-white/95 py-2.5 pl-9 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-white shadow-lg"
+            {/* Indicator Limită Lunară pentru Studenți conform Wireframe W2 */}
+            {(!user || isStudent) && (
+              <div className="w-full sm:w-80 p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 shadow-xs">
+                <div className="flex items-center justify-between text-xs font-semibold mb-1.5">
+                  <span className="text-muted-foreground">Limita ta lunară</span>
+                  <span className="text-[#0F52BA] font-bold">
+                    {studentReservationsCount} / {maxMonthlyLimit}
+                  </span>
+                </div>
+                <Progress
+                  value={(studentReservationsCount / maxMonthlyLimit) * 100}
+                  className="h-2 bg-slate-200"
                 />
+                <p className="text-[11px] text-muted-foreground mt-1.5 flex items-center justify-between">
+                  <span>
+                    {remainingReservations > 0
+                      ? `Mai ai ${remainingReservations} ${
+                          remainingReservations === 1 ? "rezervare disponibilă" : "rezervări disponibile"
+                        } luna aceasta.`
+                      : "Ai atins limita de 3 rezervări în această lună."}
+                  </span>
+                </p>
               </div>
-            </div>
+            )}
           </div>
 
-          {/* Puncte forte USV */}
-          <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-4 border-t border-white/15 pt-6 text-xs text-sky-100">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
-              <span>Acces gratuit pt. studenți (max 3/lună)</span>
+          {/* ───── Bara de filtrare cu tab-uri, căutare și sortare ───── */}
+          <div className="pt-2 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            {/* Tab-uri de filtrare pe sport conform wireframe W2 */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              {SPORT_TABS.map((tab) => {
+                const isActive = selectedTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setSelectedTab(tab.id)}
+                    className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-150 shrink-0 ${
+                      isActive
+                        ? "bg-[#0F52BA] text-white shadow-sm shadow-[#0F52BA]/25"
+                        : "bg-slate-100 text-muted-foreground hover:bg-slate-200 hover:text-foreground"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
             </div>
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-sky-300 shrink-0" />
-              <span>Program extins 07:00 – 22:00</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-amber-300 shrink-0" />
-              <span>Campus Universitar Suceava</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Check className="h-4 w-4 text-emerald-400 shrink-0" />
-              <span>Plată la recepție / vestiare incluse</span>
+
+            {/* Căutare și sortare */}
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <div className="relative flex-1 md:w-64">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Caută facilitate..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 h-9 text-xs sm:text-sm rounded-xl bg-slate-50 border-border"
+                />
+              </div>
+
+              <div className="relative shrink-0">
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortOption)}
+                  className="h-9 px-3 pr-8 rounded-xl bg-slate-50 border border-border text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-[#0F52BA] cursor-pointer appearance-none"
+                >
+                  <option value="default">Sortare: Implicit</option>
+                  <option value="price-asc">Preț: Crescător</option>
+                  <option value="price-desc">Preț: Descrescător</option>
+                  <option value="name">Nume: A-Z</option>
+                </select>
+                <ArrowUpDown className="absolute right-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ───── Corp Principal ───── */}
-      <main className="mx-auto max-w-7xl flex-1 px-4 py-8 sm:px-8 w-full">
-        {/* Selector Sporturi tip chips */}
-        <div className="mb-8 flex items-center justify-between flex-wrap gap-4 border-b border-slate-200/80 pb-5">
-          <div className="flex flex-wrap items-center gap-2">
-            {SPORT_CATEGORIES.map((cat) => {
-              const isSelected = selectedSport === cat.id;
-              const count = cat.id === "toate"
-                ? resources.length
-                : resources.filter((r) => r.sport.toLowerCase().includes(cat.id) || (cat.id === "inot" && r.type === "bazin")).length;
-
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => setSelectedSport(cat.id)}
-                  className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all duration-200 cursor-pointer min-h-[40px] ${
-                    isSelected
-                      ? "bg-[#0b5cad] text-white shadow-md shadow-[#0b5cad]/25 scale-102"
-                      : "bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                  }`}
-                >
-                  <span className="text-sm">{cat.icon}</span>
-                  <span>{cat.label}</span>
-                  <span className={`ml-1 rounded-full px-2 py-0.5 text-[10px] ${isSelected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
+      {/* ───── Grila de Facilități (Carduri conform Wireframe) ───── */}
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Banner de alertă pentru cont blocat */}
+        {isBlocked && (
+          <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Contul tău este temporar restricționat</p>
+              <p className="mt-0.5">
+                Ai acumulat 2 neprezentări la rezervările anterioare. Nu poți efectua rezervări noi până la deblocarea de către administrator.
+              </p>
+            </div>
           </div>
-
-          <div className="text-xs font-medium text-slate-500">
-            Afișate: <strong className="text-slate-800">{filtered.length}</strong> facilități
-          </div>
-        </div>
+        )}
 
         {/* Stare Încărcare */}
         {isLoading && (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <Skeleton className="aspect-16/9 w-full rounded-xl" />
-                <Skeleton className="h-6 w-3/4" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-10 w-full mt-4" />
-              </div>
+              <Card key={i} className="rounded-2xl overflow-hidden border border-border/80 p-0 shadow-xs">
+                <Skeleton className="aspect-16/10 w-full" />
+                <div className="p-5 space-y-3">
+                  <Skeleton className="h-5 w-3/4 rounded-md" />
+                  <Skeleton className="h-4 w-1/2 rounded-md" />
+                  <div className="pt-4 flex items-center justify-between">
+                    <Skeleton className="h-6 w-20 rounded-md" />
+                    <Skeleton className="h-9 w-24 rounded-xl" />
+                  </div>
+                </div>
+              </Card>
             ))}
           </div>
         )}
 
         {/* Stare Eroare */}
         {isError && (
-          <div className="rounded-2xl border border-red-200 bg-red-50/50 p-8 text-center space-y-4">
-            <AlertCircle className="mx-auto h-12 w-12 text-red-500" />
-            <h3 className="text-lg font-bold text-slate-900">Nu s-a putut încărca lista de facilități</h3>
-            <p className="text-sm text-slate-600 max-w-md mx-auto">
-              Verifică dacă serverul FastAPI rulează pe portul 8000. Datele vin direct din baza de date a proiectului.
+          <div className="p-8 text-center rounded-2xl bg-white border border-border shadow-xs max-w-md mx-auto space-y-3">
+            <AlertCircle className="h-10 w-10 text-rose-500 mx-auto" />
+            <h3 className="text-base font-bold text-foreground">Nu s-au putut încărca facilitățile</h3>
+            <p className="text-xs text-muted-foreground">
+              A apărut o problemă de comunicare cu serverul bazei sportive.
             </p>
-            <Button onClick={() => refetch()} variant="outline" size="sm" className="border-red-300 text-red-700 hover:bg-red-100">
-              <RefreshCw className="mr-2 h-4 w-4" /> Reîncearcă conexiunea
+            <Button onClick={() => refetch()} variant="outline" size="sm" className="rounded-xl">
+              Reîncearcă
             </Button>
           </div>
         )}
 
-        {/* Stare Gol */}
-        {!isLoading && !isError && filtered.length === 0 && (
-          <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white p-12 text-center text-slate-500">
-            <Dumbbell className="mx-auto h-12 w-12 text-slate-300 mb-3" />
-            <h3 className="text-base font-bold text-slate-800">Nicio facilitate găsită</h3>
-            <p className="text-xs mt-1 max-w-sm mx-auto text-slate-500">
-              {searchQuery ? "Niciun rezultat nu corespunde căutării tale." : "Nu există resurse în această categorie."}
+        {/* Stare Gol (Empty State) */}
+        {!isLoading && !isError && filteredResources.length === 0 && (
+          <div className="p-12 text-center rounded-2xl bg-white border border-border shadow-xs max-w-md mx-auto space-y-3">
+            <Dumbbell className="h-10 w-10 text-muted-foreground/50 mx-auto" />
+            <h3 className="text-base font-bold text-foreground">Nicio facilitate găsită</h3>
+            <p className="text-xs text-muted-foreground">
+              Nu există terenuri sau bazine care să corespundă criteriilor de căutare selectate.
             </p>
-            {searchQuery && (
-              <Button onClick={() => setSearchQuery("")} variant="link" size="sm" className="text-[#0b5cad] mt-2">
-                Resetează căutarea
-              </Button>
-            )}
+            <Button
+              onClick={() => {
+                setSelectedTab("toate");
+                setSearchQuery("");
+                setSortBy("default");
+              }}
+              variant="outline"
+              size="sm"
+              className="rounded-xl"
+            >
+              Resetează filtrele
+            </Button>
           </div>
         )}
 
-        {/* Grilă Carduri Facilități */}
-        {!isLoading && !isError && filtered.length > 0 && (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((item) => {
-              const image = getSportImage(item.sport, item.type);
+        {/* Lista de Carduri */}
+        {!isLoading && !isError && filteredResources.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredResources.map((facility) => {
+              const image = getSportImage(facility.sport, facility.type);
+              const subtitle = getFacilitySubtitle(facility.sport, facility.description);
+              const priceLabel =
+                facility.type === "bazin" || facility.sport.toLowerCase().includes("inot")
+                  ? `${facility.pricePerHour || 25} lei / acces`
+                  : `${facility.pricePerHour || 40} lei / oră`;
 
               return (
-                <Card 
-                  key={item.id} 
-                  className="group overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col hover:-translate-y-1"
+                <Card
+                  key={facility.id}
+                  className="rounded-2xl overflow-hidden border border-border/80 bg-white shadow-xs hover:shadow-md transition-all duration-200 flex flex-col group"
                 >
-                  {/* Poză & Badge-uri overlay */}
+                  {/* Imagine cu overlay și badge-uri semantice */}
                   <div className="relative aspect-16/10 w-full overflow-hidden bg-slate-100">
                     <img
                       src={image}
-                      alt={item.name}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-108"
+                      alt={facility.name}
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                       loading="lazy"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80" />
 
-                    {/* Badge sport stânga sus */}
-                    <div className="absolute top-3 left-3 flex gap-2">
-                      <span className="rounded-lg bg-white/95 px-2.5 py-1 text-xs font-bold text-slate-800 shadow-sm backdrop-blur-md">
-                        {item.sport.toUpperCase()}
-                      </span>
-                      <span className="rounded-lg bg-[#0b5cad]/90 px-2.5 py-1 text-xs font-medium text-white shadow-sm backdrop-blur-md">
-                        {item.type === "bazin" ? "Bazin acoperit" : "Teren exterior"}
+                    {/* Badge semantic: Disponibil (Verde conform specificației) */}
+                    <div className="absolute top-3 left-3 flex items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/90 text-white shadow-xs backdrop-blur-xs">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Disponibil
                       </span>
                     </div>
 
-                    {/* Preț dreapta jos */}
-                    <div className="absolute bottom-3 right-3 rounded-lg bg-slate-900/85 px-3 py-1.5 text-xs font-black text-white backdrop-blur-md shadow-sm">
-                      {item.pricePerHour !== null ? `${item.pricePerHour} lei / oră` : "Acces Gratuit"}
-                    </div>
+                    {/* Buton detalii rapide (info) */}
+                    <button
+                      onClick={() => setActiveFacility(facility)}
+                      className="absolute top-3 right-3 p-1.5 rounded-full bg-white/90 text-slate-700 hover:bg-white shadow-xs transition-colors"
+                      title="Detalii facilitate"
+                    >
+                      <Info className="h-4 w-4" />
+                    </button>
                   </div>
 
-                  {/* Detalii card */}
+                  {/* Conținut Card conform wireframe W2 */}
                   <CardContent className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                    <div className="space-y-2">
-                      <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#0b5cad] transition-colors leading-snug">
-                        {item.name}
-                      </h3>
-                      {item.description ? (
-                        <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                          {item.description}
-                        </p>
-                      ) : (
-                        <p className="text-xs text-slate-400 italic">
-                          Facilitate sportivă oficială din complexul universitar USV.
-                        </p>
-                      )}
+                    <div className="space-y-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="text-lg font-bold tracking-tight text-foreground group-hover:text-[#0F52BA] transition-colors">
+                          {facility.name}
+                        </h3>
+                      </div>
+                      <p className="text-xs text-muted-foreground font-medium">
+                        {subtitle}
+                      </p>
+
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground pt-1.5">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3.5 w-3.5 text-[#0F52BA]" />
+                          {facility.openHour && facility.closeHour
+                            ? `${facility.openHour} – ${facility.closeHour}`
+                            : "08:00 – 22:00"}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <MapPin className="h-3.5 w-3.5 text-[#0F52BA]" />
+                          Baza USV
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="space-y-3 pt-2 border-t border-slate-100">
-                      <div className="flex items-center justify-between text-xs text-slate-500">
-                        <span className="flex items-center gap-1.5 font-medium">
-                          <Clock className="h-3.5 w-3.5 text-[#0b5cad]" />
-                          {item.openHour && item.closeHour ? `${item.openHour} – ${item.closeHour}` : "08:00 – 22:00"}
-                        </span>
-                        <span className="flex items-center gap-1 text-slate-400">
-                          <MapPin className="h-3.5 w-3.5 text-amber-500" />
-                          Campus USV
+                    {/* Rândul de jos: Tarif și Buton Rezervă */}
+                    <div className="pt-3 border-t border-border/60 flex items-center justify-between gap-3">
+                      <div>
+                        <span className="text-xs text-muted-foreground block font-medium">Tarif</span>
+                        <span className="text-sm sm:text-base font-extrabold text-foreground">
+                          {priceLabel}
                         </span>
                       </div>
 
-                      <Button
-                        onClick={() => setActiveFacility(item)}
-                        className="w-full rounded-xl bg-slate-900 hover:bg-[#0b5cad] text-white text-xs font-bold py-2.5 shadow-sm transition-all cursor-pointer"
-                      >
-                        <span>Vezi detalii & orar</span>
-                        <ChevronRight className="h-4 w-4 ml-1" />
-                      </Button>
+                      {isBlocked ? (
+                        <Button
+                          disabled
+                          size="sm"
+                          variant="outline"
+                          className="rounded-xl text-xs font-semibold border-rose-200 text-rose-600 bg-rose-50"
+                        >
+                          Cont blocat
+                        </Button>
+                      ) : isLimitReached ? (
+                        <Button
+                          disabled
+                          size="sm"
+                          variant="outline"
+                          className="rounded-xl text-xs font-semibold"
+                        >
+                          Limită atinsă (3/3)
+                        </Button>
+                      ) : (
+                        <Button
+                          asChild
+                          size="sm"
+                          className="rounded-xl bg-[#0F52BA] hover:bg-[#1E40AF] text-white font-semibold px-4 text-xs sm:text-sm shadow-xs transition-colors"
+                        >
+                          <Link to={`/rezerva/${facility.id}`}>
+                            Rezervă
+                          </Link>
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -302,69 +413,74 @@ export default function FacilitiesPage() {
       </main>
 
       {/* ───── Modal Detalii Facilitate ───── */}
-      <Dialog open={activeFacility !== null} onOpenChange={(open) => !open && setActiveFacility(null)}>
+      <Dialog open={Boolean(activeFacility)} onOpenChange={(open) => !open && setActiveFacility(null)}>
         {activeFacility && (
-          <DialogContent className="sm:max-w-lg rounded-2xl p-0 overflow-hidden">
-            <div className="relative aspect-16/9 w-full bg-slate-100">
-              <img
-                src={getSportImage(activeFacility.sport, activeFacility.type)}
-                alt={activeFacility.name}
-                className="h-full w-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/75 to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4 text-white">
-                <span className="inline-block rounded-md bg-[#0b5cad] px-2 py-0.5 text-[10px] font-bold uppercase mb-1">
-                  {activeFacility.sport} · {activeFacility.type}
-                </span>
-                <DialogTitle className="text-xl font-black">{activeFacility.name}</DialogTitle>
+          <DialogContent className="max-w-md rounded-2xl p-6">
+            <DialogHeader>
+              <div className="flex items-center gap-2 mb-1">
+                <Badge variant="secondary" className="bg-blue-50 text-[#0F52BA] font-semibold text-xs">
+                  {activeFacility.sport.toUpperCase()}
+                </Badge>
+                <Badge variant="success" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs">
+                  Disponibil
+                </Badge>
               </div>
-            </div>
+              <DialogTitle className="text-xl font-bold">{activeFacility.name}</DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                {getFacilitySubtitle(activeFacility.sport, activeFacility.description)}
+              </DialogDescription>
+            </DialogHeader>
 
-            <div className="p-6 space-y-4 text-sm text-slate-700">
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Descriere</h4>
-                <p className="leading-relaxed">
-                  {activeFacility.description || "Teren sportiv omologat, dotat cu suprafață modernă și nocturnă profesională pentru competiții și antrenamente."}
-                </p>
+            <div className="space-y-4 pt-2">
+              <div className="aspect-16/10 rounded-xl overflow-hidden bg-slate-100">
+                <img
+                  src={getSportImage(activeFacility.sport, activeFacility.type)}
+                  alt={activeFacility.name}
+                  className="h-full w-full object-cover"
+                />
               </div>
 
-              <div className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-4 border border-slate-200/80 text-xs">
-                <div>
-                  <span className="text-slate-400 block mb-0.5 font-medium">Tarif orar:</span>
-                  <span className="text-base font-extrabold text-[#0b5cad]">
-                    {activeFacility.pricePerHour !== null ? `${activeFacility.pricePerHour} lei / oră` : "Gratuit"}
+              {activeFacility.description && (
+                <div className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  {activeFacility.description}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                  <span className="text-muted-foreground block text-[11px]">Program zilnic</span>
+                  <span className="font-bold text-foreground mt-0.5 block">
+                    {activeFacility.openHour && activeFacility.closeHour
+                      ? `${activeFacility.openHour} – ${activeFacility.closeHour}`
+                      : "08:00 – 22:00"}
                   </span>
                 </div>
-                <div>
-                  <span className="text-slate-400 block mb-0.5 font-medium">Program zilnic:</span>
-                  <span className="font-bold text-slate-800">
-                    {activeFacility.openHour && activeFacility.closeHour ? `${activeFacility.openHour} – ${activeFacility.closeHour}` : "08:00 – 22:00"}
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                  <span className="text-muted-foreground block text-[11px]">Tarif orar</span>
+                  <span className="font-bold text-[#0F52BA] mt-0.5 block">
+                    {activeFacility.pricePerHour} lei / oră
                   </span>
                 </div>
               </div>
 
-              <div className="space-y-1.5 text-xs text-slate-500">
-                <div className="flex items-center gap-2">
-                  <Check className="h-4 w-4 text-emerald-600" />
-                  <span>Vestiare și dușuri incluse cu apă caldă</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Check className="h-4 w-4 text-emerald-600" />
-                  <span>Parcare gratuită în campus pentru sportivi</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Check className="h-4 w-4 text-emerald-600" />
-                  <span>Plata se realizează direct la recepție</span>
-                </div>
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setActiveFacility(null)}>
+              <div className="pt-2 flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setActiveFacility(null)}
+                  className="flex-1 rounded-xl text-xs h-10"
+                >
                   Închide
                 </Button>
-                <Button asChild className="bg-[#0b5cad] hover:bg-[#094b8f]">
-                  <Link to="/dashboard">
-                    Modifică în baza de date
+                <Button
+                  asChild
+                  className="flex-1 rounded-xl bg-[#0F52BA] hover:bg-[#1E40AF] text-white text-xs h-10 font-semibold"
+                >
+                  <Link
+                    to={`/rezerva/${activeFacility.id}`}
+                    onClick={() => setActiveFacility(null)}
+                  >
+                    Mergi la rezervare
+                    <ChevronRight className="h-4 w-4 ml-1" />
                   </Link>
                 </Button>
               </div>
@@ -372,8 +488,6 @@ export default function FacilitiesPage() {
           </DialogContent>
         )}
       </Dialog>
-
-      {/* Dialog Detalii Facilitate */}
     </div>
   );
 }
