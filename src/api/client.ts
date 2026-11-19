@@ -391,19 +391,60 @@ export const apiClient = {
 
   users: {
     list: async (params?: { role?: "student" | "profesor" | "administrator"; blocked?: boolean }): Promise<User[]> => {
-      return handleResult(
-        api.GET("/users", {
-          params: { query: params },
-        })
-      );
+      const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
+      const url = new URL(`${API_BASE_URL}/users`, window.location.origin);
+      if (params?.role) url.searchParams.append("role", params.role);
+      if (params?.blocked !== undefined) url.searchParams.append("blocked", String(params.blocked));
+
+      const rawRes = await fetch(url.toString(), {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!rawRes.ok) {
+        const errorData = await rawRes.json().catch(() => ({}));
+        throw new ApiError(rawRes.status, mapeazaEroareApi(errorData), errorData?.detail);
+      }
+
+      const listData = await rawRes.json();
+      return (listData as Record<string, unknown>[]).map((u) => ({
+        ...u,
+        fullName:
+          (u.fullName as string) ||
+          `${(u.firstName as string) || ""} ${(u.lastName as string) || ""}`.trim() ||
+          (u.email as string),
+        isBlocked: Boolean(u.isBlocked ?? u.blocked ?? false),
+        role: String(u.role || "student").toLowerCase() as "student" | "profesor" | "administrator",
+      })) as User[];
     },
 
     unblock: async (userId: number): Promise<User> => {
-      return handleResult(
-        api.POST("/users/{userId}/unblock", {
-          params: { path: { userId } },
-        })
-      );
+      const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
+      const rawRes = await fetch(`${API_BASE_URL}/users/${userId}/unblock`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!rawRes.ok) {
+        const errorData = await rawRes.json().catch(() => ({}));
+        throw new ApiError(rawRes.status, mapeazaEroareApi(errorData), errorData?.detail);
+      }
+
+      const u = (await rawRes.json()) as Record<string, unknown>;
+      return {
+        ...u,
+        fullName:
+          (u.fullName as string) ||
+          `${(u.firstName as string) || ""} ${(u.lastName as string) || ""}`.trim() ||
+          (u.email as string),
+        isBlocked: Boolean(u.isBlocked ?? u.blocked ?? false),
+        role: String(u.role || "student").toLowerCase() as "student" | "profesor" | "administrator",
+      } as User;
     },
   },
 

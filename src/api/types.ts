@@ -6,7 +6,11 @@ export type Resource = Schemas["ResourceRead"];
 export type ResourceCreate = Schemas["ResourceCreate"];
 export type ResourceUpdate = Schemas["ResourceUpdate"];
 
-export type User = Schemas["UserResponse"];
+export type User = Schemas["UserResponse"] & {
+  reservationsThisMonth?: number;
+  firstName?: string;
+  lastName?: string;
+};
 export type UserRole = "student" | "profesor" | "administrator";
 
 export type Reservation = Schemas["ReservationRead"] & {
