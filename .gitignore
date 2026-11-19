@@ -16,6 +16,5 @@ test-results/
 playwright-report/
 
 # Mediu
-.env
 .env.*.local
 
