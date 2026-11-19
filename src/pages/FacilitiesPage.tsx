@@ -23,7 +23,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress";
 import { MonthlyLimitCard } from "@/features/reservations/MonthlyLimitCard";
 
 // Categorii de filtrare cerute explicit în task: Toate, Fotbal, Tenis, Înot
@@ -80,7 +79,6 @@ export default function FacilitiesPage() {
   const activeCount = myReservations.filter((r) => r.status === "ACTIVA" || r.status === "FINALIZATA").length;
   const studentReservationsCount = user ? activeCount : 2;
   const maxMonthlyLimit = 3;
-  const remainingReservations = Math.max(0, maxMonthlyLimit - studentReservationsCount);
   const isLimitReached = isStudent && studentReservationsCount >= maxMonthlyLimit;
 
   // Filtrare și sortare

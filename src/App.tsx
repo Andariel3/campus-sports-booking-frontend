@@ -5,6 +5,7 @@ import { AuthProvider } from "@/features/auth/AuthContext";
 import { RequireAuth, RequireAdmin, RequireGuest } from "@/features/auth/RequireAuth";
 import AppLayout from "@/components/layout/AppLayout";
 
+import HomePage from "@/pages/HomePage";
 import FacilitiesPage from "@/pages/FacilitiesPage";
 import DashboardPage from "@/pages/DashboardPage";
 import LoginPage from "@/pages/LoginPage";
@@ -31,15 +32,26 @@ export default function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            {/* Rute publice / principale cu AppLayout */}
+            {/* Pagina principală inovativă a USV */}
             <Route
               path="/"
+              element={
+                <AppLayout>
+                  <HomePage />
+                </AppLayout>
+              }
+            />
+
+            {/* Pagina de facilități sportive (conform Wireframe W2) */}
+            <Route
+              path="/facilitati"
               element={
                 <AppLayout>
                   <FacilitiesPage />
                 </AppLayout>
               }
             />
+            <Route path="/facilities" element={<Navigate to="/facilitati" replace />} />
 
             {/* Rute de autentificare (doar pentru utilizatori neautentificați) */}
             <Route

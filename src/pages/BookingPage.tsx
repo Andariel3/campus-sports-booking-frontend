@@ -16,7 +16,6 @@ import { MonthlyLimitCard } from "@/features/reservations/MonthlyLimitCard";
 import { 
   ArrowLeft, 
   ShieldAlert, 
-  Sparkles, 
   CheckCircle2, 
   AlertCircle,
   RefreshCw
@@ -87,7 +86,6 @@ export function BookingPage() {
   // Calcul total de plată
   const durationHours = selectedSlot ? selectedSlot.endHour - selectedSlot.startHour : 1;
   const totalPrice = facility ? (facility.pricePerHour || 40) * durationHours : 40;
-  const nextReservationIndex = Math.min(maxMonthlyLimit, studentReservationsCount + 1);
 
   // Mutație pentru crearea rezervării
   const createReservationMutation = useMutation({

@@ -26,7 +26,8 @@ export function AppHeader({ user, onLogout }: AppHeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navItems = [
-    { label: "Facilități", path: "/" },
+    { label: "Acasă", path: "/" },
+    { label: "Facilități", path: "/facilitati" },
     { label: "Rezervă", path: "/rezerva" },
     ...(user ? [{ label: "Rezervările mele", path: "/rezervarile-mele" }] : []),
     ...(user?.role === "administrator" ? [{ label: "Administrare", path: "/admin" }] : []),

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Dumbbell, CalendarPlus, CalendarCheck, User, Shield } from "lucide-react";
+import { Home, Dumbbell, CalendarPlus, CalendarCheck, User, Shield } from "lucide-react";
 import { useAuth } from "@/features/auth/useAuth";
 import { cn } from "@/lib/utils";
 
@@ -9,8 +9,13 @@ export function BottomNav() {
 
   const navItems = [
     {
-      label: "Facilități",
+      label: "Acasă",
       path: "/",
+      icon: Home,
+    },
+    {
+      label: "Facilități",
+      path: "/facilitati",
       icon: Dumbbell,
     },
     {
