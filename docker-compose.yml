@@ -1,0 +1,21 @@
+# Stack complet (Postgres + API + frontend) pentru rulare locală.
+# Serviciile db și backend sunt preluate neschimbate din repo-ul backend, clonat alături:
+#   Proiect-Workspace/
+#     campus-sports-booking-backend/
+#     campus-sports-booking-frontend/   <- rulați de aici
+#
+# PowerShell:  $env:POSTGRES_PASSWORD = "o-parola-locala"; docker compose up -d --build
+# Aplicația:   http://localhost:8080   (API prin proxy pe /api/v1)
+name: campus-sports-booking
+
+include:
+  - path: ../campus-sports-booking-backend/docker-compose.yml
+
+services:
+  frontend:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend

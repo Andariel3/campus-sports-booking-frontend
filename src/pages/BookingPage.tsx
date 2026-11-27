@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 import { ro } from "date-fns/locale";
 import { apiClient } from "@/api/client";
 import { useAuth } from "@/features/auth/useAuth";
@@ -77,9 +77,17 @@ export function BookingPage() {
     enabled: Boolean(user),
   });
 
+  // Numărul de rezervări curente ale studentului în luna curentă
+  const monthStart = startOfMonth(selectedDate);
+  const monthEnd = endOfMonth(selectedDate);
   const studentReservationsCount = user
-    ? myReservations.filter((r) => r.status === "ACTIVA" || r.status === "FINALIZATA").length
-    : 2;
+    ? myReservations.filter((r) => {
+        const start = new Date(r.start);
+        const inMonth = start >= monthStart && start <= monthEnd;
+        const isActive = r.status === "ACTIVA" || r.status === "FINALIZATA";
+        return inMonth && isActive;
+      }).length
+    : 0;
   const maxMonthlyLimit = 3;
   const isLimitReached = isStudent && studentReservationsCount >= maxMonthlyLimit;
 
@@ -294,6 +302,7 @@ export function BookingPage() {
                   onClick={() => refetchSlots()}
                   className="h-7 w-7 text-muted-foreground hover:text-foreground"
                   title="Actualizează acum orarul"
+                  aria-label="Actualizează acum orarul"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 ${isFetchingSlots ? "animate-spin text-[#0F52BA]" : ""}`} />
                 </Button>

@@ -37,20 +37,29 @@ export function AppHeader({ user, onLogout }: AppHeaderProps) {
     if (!user) return null;
     if (user.role === "student") {
       return (
-        <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-50 text-[11px] font-normal">
+        <Badge
+          variant="secondary"
+          className="bg-blue-50 text-blue-700 hover:bg-blue-50 text-[11px] font-normal"
+        >
           Student · max 3 rezervări / lună
         </Badge>
       );
     }
     if (user.role === "profesor") {
       return (
-        <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 text-[11px] font-normal">
+        <Badge
+          variant="secondary"
+          className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 text-[11px] font-normal"
+        >
           Cadru didactic
         </Badge>
       );
     }
     return (
-      <Badge variant="secondary" className="bg-purple-50 text-purple-700 hover:bg-purple-50 text-[11px] font-normal flex items-center gap-1">
+      <Badge
+        variant="secondary"
+        className="bg-purple-50 text-purple-700 hover:bg-purple-50 text-[11px] font-normal flex items-center gap-1"
+      >
         <Shield className="h-3 w-3" /> Administrator
       </Badge>
     );
@@ -117,6 +126,7 @@ export function AppHeader({ user, onLogout }: AppHeaderProps) {
                 size="icon"
                 onClick={onLogout}
                 title="Deconectare"
+                aria-label="Deconectare"
                 className="text-muted-foreground hover:text-destructive"
               >
                 <LogOut className="h-4 w-4" />
@@ -145,11 +155,17 @@ export function AppHeader({ user, onLogout }: AppHeaderProps) {
             </div>
           )}
           <button
+            type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 text-muted-foreground hover:text-foreground focus:outline-none"
-            aria-label="Deschide meniul"
+            className="rounded-lg p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={mobileMenuOpen ? "Închide meniul" : "Deschide meniul"}
+            aria-expanded={mobileMenuOpen}
           >
-            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            {mobileMenuOpen ? (
+              <X className="h-6 w-6" aria-hidden="true" />
+            ) : (
+              <Menu className="h-6 w-6" aria-hidden="true" />
+            )}
           </button>
         </div>
       </div>
@@ -233,4 +249,3 @@ export function AppHeader({ user, onLogout }: AppHeaderProps) {
 }
 
 export default AppHeader;
-

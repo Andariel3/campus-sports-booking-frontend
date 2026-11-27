@@ -98,7 +98,7 @@ export const mockUsersList: User[] = [
 ];
 
 // Rezervări mock
-export let mockReservations: Reservation[] = [
+export const mockReservations: Reservation[] = [
   {
     id: 101,
     resourceId: 1,

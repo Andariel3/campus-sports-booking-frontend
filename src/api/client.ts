@@ -16,7 +16,24 @@ import type {
 } from "./types";
 import { mapeazaEroareApi } from "@/lib/erori";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "/api/v1";
+export const API_BASE_URL =
+  import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "/api/v1";
+
+const TOKEN_KEY = "usv_token";
+
+/** Token-ul JWT salvat la autentificare (sesiune curentă sau „ține-mă minte”). */
+export function getAuthToken(): string | null {
+  return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+}
+
+/** Antete JSON standard, cu Authorization atunci când utilizatorul este autentificat. */
+export function authHeaders(): Record<string, string> {
+  const token = getAuthToken();
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
 
 export class ApiError extends Error {
   public status: number;
@@ -33,7 +50,7 @@ export class ApiError extends Error {
 // Middleware pentru atașarea automată a token-ului JWT și tratarea răspunsurilor 401
 const authMiddleware: Middleware = {
   async onRequest({ request }) {
-    const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
+    const token = getAuthToken();
     if (token) {
       request.headers.set("Authorization", `Bearer ${token}`);
     }
@@ -69,7 +86,9 @@ api.use(authMiddleware);
 /**
  * Helper generic pentru parsare rezultate sau aruncare ApiError
  */
-async function handleResult<T>(promise: Promise<{ data?: T; error?: unknown; response?: Response }>): Promise<T> {
+async function handleResult<T>(
+  promise: Promise<{ data?: T; error?: unknown; response?: Response }>
+): Promise<T> {
   const res = await promise;
   if (res.error) {
     const status = res.response?.status || 500;
@@ -107,7 +126,11 @@ export const apiClient = {
         if (!rawRes.ok) {
           const detail = rawData?.detail || rawData?.message;
           const status = rawRes.status;
-          throw new ApiError(status, mapeazaEroareApi({ status, detail }), typeof detail === "string" ? detail : undefined);
+          throw new ApiError(
+            status,
+            mapeazaEroareApi({ status, detail }),
+            typeof detail === "string" ? detail : undefined
+          );
         }
 
         const accessToken = (rawData.access_token || rawData.accessToken) as string;
@@ -126,7 +149,12 @@ export const apiClient = {
       }
     },
 
-    register: async (data: { email: string; password: string; fullName: string; phone?: string }) => {
+    register: async (data: {
+      email: string;
+      password: string;
+      fullName: string;
+      phone?: string;
+    }) => {
       const parts = data.fullName.trim().split(" ");
       const firstName = parts[0] || data.fullName.trim();
       const lastName = parts.slice(1).join(" ") || "Student";
@@ -152,19 +180,19 @@ export const apiClient = {
       if (!rawRes.ok) {
         const detail = rawData?.detail || rawData?.message;
         const status = rawRes.status;
-        throw new ApiError(status, mapeazaEroareApi({ status, detail }), typeof detail === "string" ? detail : undefined);
+        throw new ApiError(
+          status,
+          mapeazaEroareApi({ status, detail }),
+          typeof detail === "string" ? detail : undefined
+        );
       }
 
       return rawData as User;
     },
 
     me: async (): Promise<User> => {
-      const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
       const rawRes = await fetch(`${API_BASE_URL}/users/me`, {
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: authHeaders(),
       });
 
       if (!rawRes.ok) {
@@ -249,7 +277,6 @@ export const apiClient = {
       from?: string;
       to?: string;
     }): Promise<Reservation[]> => {
-      const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
       const url = new URL(`${API_BASE_URL}/reservations`, window.location.origin);
       if (params?.status) url.searchParams.append("status", params.status);
       if (params?.resourceId) url.searchParams.append("resourceId", String(params.resourceId));
@@ -257,10 +284,7 @@ export const apiClient = {
       if (params?.to) url.searchParams.append("to", params.to);
 
       const rawRes = await fetch(url.toString(), {
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: authHeaders(),
       });
 
       if (!rawRes.ok) {
@@ -278,12 +302,8 @@ export const apiClient = {
     },
 
     get: async (id: number): Promise<Reservation> => {
-      const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
       const rawRes = await fetch(`${API_BASE_URL}/reservations/${id}`, {
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: authHeaders(),
       });
 
       if (!rawRes.ok) {
@@ -301,13 +321,9 @@ export const apiClient = {
     },
 
     create: async (data: ReservationCreate): Promise<Reservation> => {
-      const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
       const rawRes = await fetch(`${API_BASE_URL}/reservations`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: authHeaders(),
         body: JSON.stringify({
           resourceId: data.resourceId,
           start: data.start,
@@ -328,13 +344,9 @@ export const apiClient = {
     },
 
     cancel: async (id: number): Promise<Reservation> => {
-      const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
       const rawRes = await fetch(`${API_BASE_URL}/reservations/${id}`, {
         method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: authHeaders(),
       });
 
       const rawData = await rawRes.json().catch(() => ({}));
@@ -350,13 +362,9 @@ export const apiClient = {
     },
 
     setPayment: async (id: number, paymentStatus: PaymentStatus): Promise<Reservation> => {
-      const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
       const rawRes = await fetch(`${API_BASE_URL}/reservations/${id}/payment`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: authHeaders(),
         body: JSON.stringify({ paymentStatus }),
       });
 
@@ -373,13 +381,9 @@ export const apiClient = {
     },
 
     markNoShow: async (id: number): Promise<Reservation> => {
-      const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
       const rawRes = await fetch(`${API_BASE_URL}/reservations/${id}/no-show`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: authHeaders(),
       });
       const data = await rawRes.json();
       if (!rawRes.ok) {
@@ -390,17 +394,16 @@ export const apiClient = {
   },
 
   users: {
-    list: async (params?: { role?: "student" | "profesor" | "administrator"; blocked?: boolean }): Promise<User[]> => {
-      const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
+    list: async (params?: {
+      role?: "student" | "profesor" | "administrator";
+      blocked?: boolean;
+    }): Promise<User[]> => {
       const url = new URL(`${API_BASE_URL}/users`, window.location.origin);
       if (params?.role) url.searchParams.append("role", params.role);
       if (params?.blocked !== undefined) url.searchParams.append("blocked", String(params.blocked));
 
       const rawRes = await fetch(url.toString(), {
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: authHeaders(),
       });
 
       if (!rawRes.ok) {
@@ -421,13 +424,9 @@ export const apiClient = {
     },
 
     unblock: async (userId: number): Promise<User> => {
-      const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
       const rawRes = await fetch(`${API_BASE_URL}/users/${userId}/unblock`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: authHeaders(),
       });
 
       if (!rawRes.ok) {
@@ -451,12 +450,8 @@ export const apiClient = {
   maintenance: {
     list: async (resourceId?: number): Promise<MaintenanceBlock[]> => {
       try {
-        const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
         const rawRes = await fetch(`${API_BASE_URL}/maintenance-blocks`, {
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
+          headers: authHeaders(),
         });
         if (rawRes.ok) {
           const blocks = (await rawRes.json()) as MaintenanceBlock[];
@@ -473,13 +468,9 @@ export const apiClient = {
 
     create: async (data: MaintenanceBlockCreate): Promise<MaintenanceBlock> => {
       try {
-        const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
         const rawRes = await fetch(`${API_BASE_URL}/maintenance-blocks`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
+          headers: authHeaders(),
           body: JSON.stringify(data),
         });
         if (rawRes.ok) {
@@ -505,13 +496,9 @@ export const apiClient = {
 
     delete: async (blockId: number): Promise<void> => {
       try {
-        const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
         await fetch(`${API_BASE_URL}/maintenance-blocks/${blockId}`, {
           method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
+          headers: authHeaders(),
         });
       } catch {
         // Fallback
@@ -527,7 +514,10 @@ export const apiClient = {
   },
 
   reports: {
-    financial: async (params?: { month?: string; format?: "json" | "csv" | "xlsx" | "pdf" }): Promise<FinancialReport> => {
+    financial: async (params?: {
+      month?: string;
+      format?: "json" | "csv" | "xlsx" | "pdf";
+    }): Promise<FinancialReport> => {
       const res = (await api.GET("/reports/financial", {
         params: { query: params },
       })) as { data?: FinancialReport; error?: unknown; response?: Response };
@@ -537,7 +527,10 @@ export const apiClient = {
       return res.data as FinancialReport;
     },
 
-    occupancy: async (params?: { month?: string; format?: "json" | "csv" | "xlsx" | "pdf" }): Promise<OccupancyReport> => {
+    occupancy: async (params?: {
+      month?: string;
+      format?: "json" | "csv" | "xlsx" | "pdf";
+    }): Promise<OccupancyReport> => {
       const res = (await api.GET("/reports/occupancy", {
         params: { query: params },
       })) as { data?: OccupancyReport; error?: unknown; response?: Response };
