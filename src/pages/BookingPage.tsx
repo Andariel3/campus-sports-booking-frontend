@@ -82,7 +82,7 @@ export function BookingPage() {
   const monthEnd = endOfMonth(selectedDate);
   const studentReservationsCount = user
     ? myReservations.filter((r) => {
-        const start = new Date(r.start_time);
+        const start = new Date(r.start);
         const inMonth = start >= monthStart && start <= monthEnd;
         const isActive = r.status === "ACTIVA" || r.status === "FINALIZATA";
         return inMonth && isActive;
@@ -302,6 +302,7 @@ export function BookingPage() {
                   onClick={() => refetchSlots()}
                   className="h-7 w-7 text-muted-foreground hover:text-foreground"
                   title="Actualizează acum orarul"
+                  aria-label="Actualizează acum orarul"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 ${isFetchingSlots ? "animate-spin text-[#0F52BA]" : ""}`} />
                 </Button>

@@ -1,9 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "@/api/client";
+import { apiClient, API_BASE_URL, authHeaders, getAuthToken } from "@/api/client";
 import type { AvailabilitySlot, SlotStatus } from "@/api/types";
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
 export interface UseAvailabilityOptions {
   resourceId: number;
@@ -36,7 +34,11 @@ export function notifyAvailabilityChange(resourceId: number, dateStr?: string) {
  */
 export function useAvailability({ resourceId, dateStr, enabled = true }: UseAvailabilityOptions) {
   const queryClient = useQueryClient();
-  const queryKey = ["availability", resourceId, dateStr];
+  // Cheie stabilă între randări: altfel efectele de mai jos s-ar reabona (și ar redeschide SSE) la fiecare randare
+  const queryKey = useMemo(
+    () => ["availability", resourceId, dateStr] as const,
+    [resourceId, dateStr]
+  );
 
   // 1. Abonare la BroadcastChannel pentru sincronizare instantanee între ferestre/tab-uri
   useEffect(() => {
@@ -59,12 +61,17 @@ export function useAvailability({ resourceId, dateStr, enabled = true }: UseAvai
 
   // 2. Conectare la SSE dacă serverul expune un flux de evenimente live
   useEffect(() => {
-    if (!enabled || resourceId <= 0 || typeof window === "undefined" || !("EventSource" in window)) {
+    if (
+      !enabled ||
+      resourceId <= 0 ||
+      typeof window === "undefined" ||
+      !("EventSource" in window)
+    ) {
       return;
     }
 
     let eventSource: EventSource | null = null;
-    const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
+    const token = getAuthToken();
     const sseUrl = `${API_BASE_URL}/events/availability/${resourceId}${token ? `?token=${encodeURIComponent(token)}` : ""}`;
 
     try {
@@ -106,13 +113,12 @@ export function useAvailability({ resourceId, dateStr, enabled = true }: UseAvai
     staleTime: 3000,
     queryFn: async (): Promise<AvailabilitySlot[]> => {
       try {
-        const token = sessionStorage.getItem("usv_token") || localStorage.getItem("usv_token");
-        const rawRes = await fetch(`${API_BASE_URL}/resources/${resourceId}/availability?date=${dateStr}`, {
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        });
+        const rawRes = await fetch(
+          `${API_BASE_URL}/resources/${resourceId}/availability?date=${dateStr}`,
+          {
+            headers: authHeaders(),
+          }
+        );
 
         if (!rawRes.ok) {
           return generareSloturiImplicite(dateStr);

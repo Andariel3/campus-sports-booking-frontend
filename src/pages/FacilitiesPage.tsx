@@ -318,9 +318,11 @@ export default function FacilitiesPage() {
 
                     {/* Buton detalii rapide (info) */}
                     <button
+                      type="button"
                       onClick={() => setActiveFacility(facility)}
-                      className="absolute top-3 right-3 p-1.5 rounded-full bg-white/90 text-slate-700 hover:bg-white shadow-xs transition-colors"
+                      className="absolute top-3 right-3 p-1.5 rounded-full bg-white/90 text-slate-700 hover:bg-white shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F52BA]"
                       title="Detalii facilitate"
+                      aria-label={`Detalii despre ${facility.name}`}
                     >
                       <Info className="h-4 w-4" />
                     </button>
@@ -428,6 +430,7 @@ export default function FacilitiesPage() {
                   src={getSportImage(activeFacility.sport, activeFacility.type)}
                   alt={activeFacility.name}
                   className="h-full w-full object-cover"
+                  decoding="async"
                 />
               </div>
 
